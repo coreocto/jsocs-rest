@@ -1,88 +1,87 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" th:with="currentPage='accounts'">
 <head>
-
-    <!-- Latest compiled and minified CSS -->
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
-          integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
-
-    <!-- Optional theme -->
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css"
-          integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp" crossorigin="anonymous">
-    <link rel="stylesheet" href="http://getbootstrap.com/docs/3.3/examples/dashboard/dashboard.css"/>
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.10.19/css/dataTables.bootstrap.min.css"/>
-    <link ref="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap3-dialog/1.34.7/css/bootstrap-dialog.min.css"/>
-    <!--<link ref="stylesheet"-->
-          <!--href="//cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.12.4/css/bootstrap-select.min.css"/>-->
-
+    <div th:replace="fragments/common-head"></div>
+    <div th:replace="fragments/bootstrapInclude :: css"></div>
+    <div th:replace="fragments/common-css"></div>
 </head>
 <body>
 
-<nav class="navbar navbar-inverse navbar-fixed-top">
-    <div class="container-fluid">
-        <div class="navbar-header">
-            <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar"
-                    aria-expanded="false" aria-controls="navbar">
-                <span class="sr-only">Toggle navigation</span>
-                <span class="icon-bar"></span>
-                <span class="icon-bar"></span>
-                <span class="icon-bar"></span>
-            </button>
-            <a class="navbar-brand" href="#">JSOCS Alpha</a>
-        </div>
-        <!--<div id="navbar" class="navbar-collapse collapse">-->
-            <!--<ul class="nav navbar-nav navbar-right">-->
-                <!--<li><a href="#">Dashboard</a></li>-->
-                <!--<li><a href="#">Settings</a></li>-->
-                <!--<li><a href="#">Profile</a></li>-->
-                <!--<li><a href="#">Help</a></li>-->
-            <!--</ul>-->
-            <!--<form class="navbar-form navbar-right">-->
-                <!--<input type="text" class="form-control" placeholder="Search...">-->
-            <!--</form>-->
-        <!--</div>-->
-    </div>
-</nav>
-
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-sm-3 col-md-2 sidebar">
-            <!--<ul class="nav nav-sidebar">-->
-                <!--<li class="active"><a href="/accounts">Accounts <span class="sr-only">(current)</span></a></li>-->
-                <!--<li><a href="/files">Files</a></li>-->
-                <!--<li><a href="#">Storage</a></li>-->
-                <!--<li><a href="#">Export</a></li>-->
-            <!--</ul>-->
-            <ul th:replace="commonSidebar"></ul>
-        </div>
-        <div class="col-sm-9 col-sm-offset-3 col-md-10 col-md-offset-2 main">
-            <h1 class="page-header">Accounts</h1>
-
-            <div class="table-responsive">
-                <table class="table table-striped" id="accTable">
-                </table>
-            </div>
-
-            <div><a class="btn btn-info btn-sm add-btn">
-                <span class="glyphicon glyphicon-plus"></span> Add
-            </a></div>
-        </div>
+<div class="wrapper">
+    <div th:replace="fragments/leftSidebar"></div>
+    <!-- Page Content  -->
+    <div id="content">
+        <div th:replace="fragments/topNavBar"></div>
+        <table class="table table-striped" id="accTable"></table>
+        <button type="button" class="btn btn-info add-btn">
+            <span>Add</span>
+        </button>
+        <!--<a class="btn btn-info add-btn">-->
+            <!--<span class="glyphicon glyphicon-plus"></span> Add-->
+        <!--</a>-->
     </div>
 </div>
+
+<!--<nav class="navbar navbar-inverse navbar-fixed-top">-->
+    <!--<div class="container-fluid">-->
+        <!--<div class="navbar-header">-->
+            <!--<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar"-->
+                    <!--aria-expanded="false" aria-controls="navbar">-->
+                <!--<span class="sr-only">Toggle navigation</span>-->
+                <!--<span class="icon-bar"></span>-->
+                <!--<span class="icon-bar"></span>-->
+                <!--<span class="icon-bar"></span>-->
+            <!--</button>-->
+            <!--<a class="navbar-brand" href="#">JSOCS Alpha</a>-->
+        <!--</div>-->
+        <!--&lt;!&ndash;<div id="navbar" class="navbar-collapse collapse">&ndash;&gt;-->
+            <!--&lt;!&ndash;<ul class="nav navbar-nav navbar-right">&ndash;&gt;-->
+                <!--&lt;!&ndash;<li><a href="#">Dashboard</a></li>&ndash;&gt;-->
+                <!--&lt;!&ndash;<li><a href="#">Settings</a></li>&ndash;&gt;-->
+                <!--&lt;!&ndash;<li><a href="#">Profile</a></li>&ndash;&gt;-->
+                <!--&lt;!&ndash;<li><a href="#">Help</a></li>&ndash;&gt;-->
+            <!--&lt;!&ndash;</ul>&ndash;&gt;-->
+            <!--&lt;!&ndash;<form class="navbar-form navbar-right">&ndash;&gt;-->
+                <!--&lt;!&ndash;<input type="text" class="form-control" placeholder="Search...">&ndash;&gt;-->
+            <!--&lt;!&ndash;</form>&ndash;&gt;-->
+        <!--&lt;!&ndash;</div>&ndash;&gt;-->
+    <!--</div>-->
+<!--</nav>-->
+
+<!--<div class="container-fluid">-->
+    <!--<div class="row">-->
+        <!--<div class="col-sm-3 col-md-2 sidebar">-->
+            <!--&lt;!&ndash;<ul class="nav nav-sidebar">&ndash;&gt;-->
+                <!--&lt;!&ndash;<li class="active"><a href="/accounts">Accounts <span class="sr-only">(current)</span></a></li>&ndash;&gt;-->
+                <!--&lt;!&ndash;<li><a href="/files">Files</a></li>&ndash;&gt;-->
+                <!--&lt;!&ndash;<li><a href="#">Storage</a></li>&ndash;&gt;-->
+                <!--&lt;!&ndash;<li><a href="#">Export</a></li>&ndash;&gt;-->
+            <!--&lt;!&ndash;</ul>&ndash;&gt;-->
+            <!--<div th:replace="fragments\commonSidebar"></div>-->
+        <!--</div>-->
+        <!--<div class="col-sm-9 col-sm-offset-3 col-md-10 col-md-offset-2 main">-->
+            <!--<h1 class="page-header">Accounts</h1>-->
+
+            <!--<div class="table-responsive">-->
+                <!--<table class="table table-striped" id="accTable">-->
+                <!--</table>-->
+            <!--</div>-->
+
+            <!--<div><a class="btn btn-info btn-sm add-btn">-->
+                <!--<span class="glyphicon glyphicon-plus"></span> Add-->
+            <!--</a></div>-->
+        <!--</div>-->
+    <!--</div>-->
+<!--</div>-->
 
 <div id="dummy" style="display:none"></div>
 
 </body>
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
-<!-- Latest compiled and minified JavaScript -->
-<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"
-        integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
-        crossorigin="anonymous"></script>
-<script src="https://cdn.datatables.net/1.10.19/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.10.19/js/dataTables.bootstrap.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap3-dialog/1.34.7/js/bootstrap-dialog.min.js"></script>
+<div th:replace="fragments/bootstrapInclude :: js"></div>
+<div th:replace="fragments/datatablesInclude :: js"></div>
+<div th:replace="fragments/bootstrapDialogInclude :: js"></div>
 <!--<script src="//cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.12.4/js/bootstrap-select.min.js"></script>-->
+<div th:replace="fragments/common-js"></div>
 <script>
     $(function () {
         var table = $("#accTable").DataTable({
@@ -115,10 +114,13 @@
                     "data": "ctoken"
                 },
                 {
+                    "width": "10%",
                     "title": "Operations",
-                    "defaultContent": "<button class='delete-btn'>Delete</button>"+
-                                "<button class='refresh-btn'>Refresh</button>"+
-                                "<button class='init-btn'>Initialize</button>"
+                    "defaultContent": "<div class=\"btn-group\" role=\"group\">" +
+                                "<button class='btn btn-secondary delete-btn'>Delete</button>"+
+                                "<button class='btn btn-secondary refresh-btn'>Refresh</button>"+
+                                //"<button class='btn btn-secondary init-btn'>Initialize</button>" +
+                                "</div>"
                 }
             ]
         });
@@ -128,94 +130,134 @@
             .on('click', 'button.delete-btn', function () {
                 var data = table.row($(this).parents('tr')).data();
 
-                var dialogRef = BootstrapDialog.confirm('Are you sure to remove this account?', function (result) {
-                    if (result) {
+                BootstrapModalWrapperFactory.confirm({
+                    title: "Confirm",
+                    message: 'Are you sure to remove this account?',
+                    onConfirmAccept: function () {
                         $.post('/api/accounts/d',
                             {
                                 userId: data.cid
                             }, function (data) {
                                 if (data == 'success') {
-                                    dialogRef.close();
-                                    BootstrapDialog.alert('Account deleted!');
+                                    BootstrapModalWrapperFactory.alert('Account deleted!');
+                                    table.ajax.reload();
                                 } else {
-                                    BootstrapDialog.alert('Failed to delete account!');
+                                    BootstrapModalWrapperFactory.alert('Failed to delete account!');
                                 }
                             });
+                    },
+                    onConfirmCancel: function () {
                     }
                 });
+
+                // var dialogRef = BootstrapDialog.confirm('Are you sure to remove this account?', function (result) {
+                //     if (result) {
+                //         $.post('/api/accounts/d',
+                //             {
+                //                 userId: data.cid
+                //             }, function (data) {
+                //                 if (data == 'success') {
+                //                     dialogRef.close();
+                //                     BootstrapModalWrapperFactory.alert('Account deleted!');
+                //                 } else {
+                //                     BootstrapModalWrapperFactory.alert('Failed to delete account!');
+                //                 }
+                //             });
+                //     }
+                // });
             })
             .on('click', 'button.refresh-btn', function(){
                 var data = table.row($(this).parents('tr')).data();
 
-                BootstrapDialog.show({
-                    message: function (dialog) {
-                        var $message = $('<iframe></iframe>');
-                        var pageToLoad = dialog.getData('pageToLoad');
-                        $message.load(pageToLoad);
+                window.open('https://my.pcloud.com/oauth2/authorize?client_id=1z5SVQMlzHk&response_type=code&redirect_uri=http://localhost:8080');
 
-                        return $message;
-                    },
-                    data: {
-                        'pageToLoad': 'https://my.pcloud.com/oauth2/authorize?client_id=1z5SVQMlzHk&response_type=code&redirect_uri=http://localhost:8080'
-                    },
-                    buttons: [{
-                        label: 'Submit',
-                        action: function (dialogRef) {
-                            dialogRef.close();
-                        }
-                    }]
-                });
-            })
-            .on('click', 'button.init-btn', function () {
-                var data = table.row($(this).parents('tr')).data();
-
-                var dialog = BootstrapDialog.show({
-                    message: 'Initialization in progress... please wait...'
-                });
-                $.post('/api/storage/init',
-                    {
-                        userId: data.cid
-                    }, function (data) {
-                        if (data == 'success') {
-                            dialog.close();
-                            BootstrapDialog.alert('Storage initialization succeed!');
-                        } else if (data == 'failed') {
-                            dialog.close();
-                            BootstrapDialog.alert('Storage initialization failed!');
-                        }
-                    });
+                // BootstrapDialog.show({
+                //     message: function (dialog) {
+                //         var $message = $('<iframe></iframe>');
+                //         var pageToLoad = dialog.getData('pageToLoad');
+                //         $message.load(pageToLoad);
+                //
+                //         return $message;
+                //     },
+                //     data: {
+                //         'pageToLoad': 'https://my.pcloud.com/oauth2/authorize?client_id=1z5SVQMlzHk&response_type=code&redirect_uri=http://localhost:8080'
+                //     },
+                //     buttons: [{
+                //         label: 'Submit',
+                //         action: function (dialogRef) {
+                //             dialogRef.close();
+                //         }
+                //     }]
+                // });
             });
 
         $(".add-btn").click(function () {
-            BootstrapDialog.show({
-                message: function (dialog) {
-                    var $message = $('<div></div>');
-                    var pageToLoad = dialog.getData('pageToLoad');
-                    $message.load(pageToLoad);
 
-                    return $message;
-                },
-                data: {
-                    'pageToLoad': '/accounts/add'
-                },
-                buttons: [{
-                    label: 'Submit',
-                    action: function (dialogRef) {
-
-                        $.post('/api/accounts/c', {
-                            username: $("#accountName").val(),
-                            type: $("#type").val()
-                        }).done(function (data) {
-                            if (data == 'success') {
-                                dialogRef.close();
-                                BootstrapDialog.alert('Account added!', function () {
+            BootstrapModalWrapperFactory.createAjaxModal({
+                message: '<div class="text-center">Loading</div>',
+                closable: true,
+                title: "AJAX Content",
+                closeByBackdrop: false,
+                url: '/accounts/add',
+                buttons: [
+                    {
+                        label: "Cancel",
+                        cssClass: "btn btn-secondary",
+                        action: function (modalWrapper, button, buttonData, originalEvent) {
+                            return modalWrapper.hide();
+                        }
+                    },
+                    {
+                        label: "Add",
+                        cssClass: "btn btn-primary",
+                        action: function (modalWrapper, button, buttonData, originalEvent) {
+                            $.post('/api/accounts/c', {
+                                username: $("#accountName").val(),
+                                type: $("#type").val()
+                            }).done(function (data) {
+                                modalWrapper.hide();
+                                if (data == 'success') {
+                                    BootstrapModalWrapperFactory.alert('Account added!');
                                     table.ajax.reload();
-                                });
-                            }
-                        });
+                                }else{
+                                    BootstrapModalWrapperFactory.alert('Failed to add account!!');
+                                }
+                            });
+                        }
                     }
-                }]
+                ]
             });
+
+            // BootstrapDialog.show({
+            //     message: function (dialog) {
+            //         var $message = $('<div></div>');
+            //         var pageToLoad = dialog.getData('pageToLoad');
+            //         $message.load(pageToLoad);
+            //
+            //         return $message;
+            //     },
+            //     data: {
+            //         'pageToLoad': '/accounts/add'
+            //     },
+            //     buttons: [{
+            //         label: 'Submit',
+            //         action: function (dialogRef) {
+            //
+            //             $.post('/api/accounts/c', {
+            //                 username: $("#accountName").val(),
+            //                 type: $("#type").val()
+            //             }).done(function (data) {
+            //                 if (data == 'success') {
+            //                     dialogRef.close();
+            //                     BootstrapModalWrapperFactory.alert('Account deleted!');
+            //                     // BootstrapModalWrapperFactory.alert('Account added!', function () {
+            //                     //     table.ajax.reload();
+            //                     // });
+            //                 }
+            //             });
+            //         }
+            //     }]
+            // });
         });
     });
 </script>
