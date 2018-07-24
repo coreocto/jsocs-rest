@@ -14,7 +14,7 @@ public class AccountServiceImpl implements AccountService {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    private static final String SQL_FIELDS = "cusername, cpassword, ccrtdt, cid, COALESCE(cinit,0) as cinit, ctoken, ctype, cauth_token";
+    private static final String SQL_FIELDS = "cusername, cpassword, ccrtdt, cid, COALESCE(cinit,0) as cinit, ctoken, ctype, cauth_token, ccrtoken";
 
     //provision
     @Override

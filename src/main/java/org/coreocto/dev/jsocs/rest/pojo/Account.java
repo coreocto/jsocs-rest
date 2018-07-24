@@ -11,6 +11,15 @@ public class Account {
     private String ctoken;
     private String cauthToken;
     private String ctype;
+    private String ccrtoken;
+
+    public String getCcrtoken() {
+        return ccrtoken;
+    }
+
+    public void setCcrtoken(String ccrtoken) {
+        this.ccrtoken = ccrtoken;
+    }
 
     public String getCtype() {
         return ctype;

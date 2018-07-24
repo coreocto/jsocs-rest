@@ -16,17 +16,17 @@ public class BlockServiceImpl implements BlockService {
 
     @Override
     public void create(String name, long size, int owner) {
-        jdbcTemplate.update("insert into tblock(cname,cuse,csize,cremoteid,caccid) values(?,?,?,NULL,?)", name, 0, size, owner);
+        jdbcTemplate.update("insert into tblock(cname,cuse,csize,cremoteid,caccid) values(?,?,?,NULL,?)", name, 1, size, owner);
     }
 
     @Override
     public void create(String name, long size, int owner, String remoteId) {
-        jdbcTemplate.update("insert into tblock(cname,cuse,csize,cremoteid,caccid) values(?,?,?,?,?)", name, 0, size, remoteId, owner);
+        jdbcTemplate.update("insert into tblock(cname,cuse,csize,cremoteid,caccid) values(?,?,?,?,?)", name, 1, size, remoteId, owner);
     }
 
     @Override
     public void create(String name, long size, int owner, String remoteId, String directLink) {
-        jdbcTemplate.update("insert into tblock(cname,cuse,csize,cremoteid,caccid,cdirectLink) values(?,?,?,?,?,?)", name, 0, size, remoteId, owner, directLink);
+        jdbcTemplate.update("insert into tblock(cname,cuse,csize,cremoteid,caccid,cdirectLink) values(?,?,?,?,?,?)", name, 1, size, remoteId, owner, directLink);
     }
 
     @Override
@@ -52,6 +52,11 @@ public class BlockServiceImpl implements BlockService {
     @Override
     public Block getById(int blockId) {
         return (Block) jdbcTemplate.queryForObject("select * from tblock where cid = ?", new Object[]{blockId}, new BeanPropertyRowMapper(Block.class));
+    }
+
+    @Override
+    public Block getByName(String name) {
+        return (Block) jdbcTemplate.queryForObject("select * from tblock where cname = ?", new Object[]{name}, new BeanPropertyRowMapper(Block.class));
     }
 
     @Override

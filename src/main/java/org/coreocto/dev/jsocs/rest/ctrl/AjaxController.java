@@ -39,39 +39,38 @@ public class AjaxController {
     @Autowired
     RemoteStorageFactory remoteStorageFactory;
 
-    @RequestMapping("/api/storage/init")
-    public String init(
-            @RequestParam("userId") Optional<Integer> userId
-//            @RequestParam("userName") String userName, @RequestParam("type") String type
-    ) {
-
-        boolean success = true;
-
-        try {
-            if (userId.isPresent()) {
-                Account userAcc = accountService.getById(userId.get());
-                IRemoteStorage remoteStorage = remoteStorageFactory.make(userAcc.getCtype(), userAcc.getCid(), userAcc.getCauthToken());
-                storageMgr.init(remoteStorage);
-            } else {
-                List<Account> accList = accountService.getAllAccounts();
-                for (Account userAcc : accList) {
-                    IRemoteStorage remoteStorage = remoteStorageFactory.make(userAcc.getCtype(), userAcc.getCid(), userAcc.getCauthToken());
-                    storageMgr.init(remoteStorage);
-                }
-            }
-
-        } catch (MissingTokenException e) { //need further handling
-            success = false;
-        } catch (MissingAccessTokenException e){
-            success = false;
-        }
-
-        if (success) {
-            return "success";
-        } else {
-            return "failed";
-        }
-    }
+//    @RequestMapping("/api/storage/init")
+//    public String init(
+//            @RequestParam("userId") Optional<Integer> userId
+//    ) {
+//
+//        boolean success = true;
+//
+//        try {
+//            if (userId.isPresent()) {
+//                Account userAcc = accountService.getById(userId.get());
+//                IRemoteStorage remoteStorage = remoteStorageFactory.make(userAcc.getCtype(), userAcc.getCid(), userAcc.getCauthToken());
+//                storageMgr.init(remoteStorage);
+//            } else {
+//                List<Account> accList = accountService.getAllAccounts();
+//                for (Account userAcc : accList) {
+//                    IRemoteStorage remoteStorage = remoteStorageFactory.make(userAcc.getCtype(), userAcc.getCid(), userAcc.getCauthToken());
+//                    storageMgr.init(remoteStorage);
+//                }
+//            }
+//
+//        } catch (MissingTokenException e) { //need further handling
+//            success = false;
+//        } catch (MissingAccessTokenException e){
+//            success = false;
+//        }
+//
+//        if (success) {
+//            return "success";
+//        } else {
+//            return "failed";
+//        }
+//    }
 
     //accounts
 

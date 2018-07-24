@@ -100,7 +100,7 @@ public class PCloudRSImpl implements IRemoteStorage {
                             fileId = Long.parseLong(s);
                         } catch (NumberFormatException ex) {
                         }
-                    }else{
+                    } else {
                         throw new RuntimeException();
                     }
 
@@ -249,7 +249,6 @@ public class PCloudRSImpl implements IRemoteStorage {
 //                .create();
 
 
-
         RemoteFile remoteFile = null;
 
         try {
@@ -272,6 +271,18 @@ public class PCloudRSImpl implements IRemoteStorage {
     @Override
     public int getUserId() {
         return userId;
+    }
+
+    @Override
+    public long getAvailable() throws IOException {
+        long result = 0;
+        try {
+            UserInfo userInfo = apiClient.getUserInfo().execute();
+            result = userInfo.totalQuota() - userInfo.usedQuota();
+        } catch (ApiError apiError) {
+            apiError.printStackTrace();
+        }
+        return result;
     }
 
 

@@ -1,5 +1,8 @@
 package org.coreocto.dev.jsocs.rest.nio;
 
+import com.cloudrail.si.exceptions.ParseException;
+import com.cloudrail.si.interfaces.CloudStorage;
+import com.cloudrail.si.types.SpaceAllocation;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
 import org.coreocto.dev.jsocs.rest.Constant;
@@ -7,8 +10,7 @@ import org.coreocto.dev.jsocs.rest.db.AccountService;
 import org.coreocto.dev.jsocs.rest.db.BlockService;
 import org.coreocto.dev.jsocs.rest.db.FileService;
 import org.coreocto.dev.jsocs.rest.db.FileTableService;
-import org.coreocto.dev.jsocs.rest.exception.MissingAccessTokenException;
-import org.coreocto.dev.jsocs.rest.exception.MissingTokenException;
+import org.coreocto.dev.jsocs.rest.exception.InsufficientSpaceAvailableException;
 import org.coreocto.dev.jsocs.rest.pojo.Account;
 import org.coreocto.dev.jsocs.rest.pojo.Block;
 import org.coreocto.dev.jsocs.rest.pojo.FileEntry;
@@ -19,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.*;
+import java.nio.file.FileAlreadyExistsException;
 import java.util.*;
 
 @Service
@@ -45,86 +48,132 @@ public class StorageMgr {
     @Autowired
     RemoteStorageFactory remoteStorageFactory;
 
-    public void init() {
-        List<Account> accList = accountService.getAllAccounts();
-        for (Account account : accList) {
-            IRemoteStorage remoteStorage = remoteStorageFactory.make(account.getCtype(), account.getCid(), account.getCauthToken());
-            this.init(remoteStorage);
-        }
-    }
+//    public void init() {
+//        List<Account> accList = accountService.getAllAccounts();
+//        for (Account account : accList) {
+//            IRemoteStorage remoteStorage = remoteStorageFactory.make(account.getCtype(), account.getCid(), account.getCauthToken());
+//            this.init(remoteStorage);
+//        }
+//    }
 
-    private File makeEmptyBlock() throws IOException {
-        java.io.File tmpFile = java.io.File.createTempFile("jsocs-", ".tmp", TMP_DIR);
-
-        try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(tmpFile))) {
-            for (int i = 0; i < BLOCKSIZE; i++) {
-                out.write(0);
-            }
-            out.flush();
-        } finally {
-
-        }
-
-        return tmpFile;
-    }
+//    private File makeEmptyBlock() throws IOException {
+//        java.io.File tmpFile = java.io.File.createTempFile("jsocs-", ".tmp", TMP_DIR);
+//
+//        try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(tmpFile))) {
+//            for (int i = 0; i < BLOCKSIZE; i++) {
+//                out.write(0);
+//            }
+//            out.flush();
+//        } finally {
+//
+//        }
+//
+//        return tmpFile;
+//    }
 
     //function to initialize specific remote storage
-    public void init(IRemoteStorage remoteStorage) {
-        Account account = accountService.getById(remoteStorage.getUserId());
-        if (account.getCinit() == 0) {
+//    public void init(IRemoteStorage remoteStorage) {
+//        Account account = accountService.getById(remoteStorage.getUserId());
+//        if (account.getCinit() == 0) {
+//
+//            if (account.getCtoken() == null || account.getCtoken().isEmpty()) {
+//                throw new MissingTokenException();
+//            } else if (account.getCauthToken() == null || account.getCauthToken().isEmpty()) {
+//                throw new MissingAccessTokenException();
+//            }
+//
+//            File tmpFile = null;
+//
+//            try {
+//                tmpFile = makeEmptyBlock();
+//            } catch (IOException e) {
+//                logger.error("failed to create empty block file", e);
+//            }
+//
+//            List<String> blockNames = new ArrayList<>();
+//
+//            // allocate 150 x 64MB block of memory
+//            // for some storage provider, they don't allow us to directly manipulate the content of uploaded files
+//            // hence when updating those files, we need to explicitly create another data block and remove the old one
+//            // it provides a buffer from exceed the storage limit
+//            for (int i = 0; i < 150; i++) {
+//                String id = UUID.randomUUID().toString();
+//                blockNames.add(id + ".bin");
+//            }
+//
+//            List<Map<String, Object>> provisionResult = null;
+//
+//            try {
+//                provisionResult = remoteStorage.provision(tmpFile, blockNames);
+//            } catch (IOException e) {
+//                logger.error("failed to provision space on remote storage", e);
+//            }
+//
+//            int len = provisionResult.size();
+//
+//            for (int i = 0; i < len; i++) {
+//                String id = blockNames.get(i);
+//                String remoteId = null;
+//                String downloadLink = null;
+//                Map<String, Object> tmpMap = provisionResult.get(i);
+//                remoteId = (String) tmpMap.get("fileId");
+//                downloadLink = (String) tmpMap.get("downloadLink"); //for pCloud only, it allows direct download of uploaded files
+//
+//                blockService.create(id, BLOCKSIZE, account.getCid(), remoteId, downloadLink);    //uuid, blockSize, accountName, remoteFileId
+//                logger.debug("block - " + id + " (" + remoteId + ") created");
+//            }
+//
+//            accountService.updateInitStatus(account.getCid(), true);
+//
+//        } else {
+//            logger.debug("account: " + account.getCusername() + " already initialized");
+//        }
+//    }
 
-            if (account.getCtoken() == null || account.getCtoken().isEmpty()) {
-                throw new MissingTokenException();
-            } else if (account.getCauthToken() == null || account.getCauthToken().isEmpty()) {
-                throw new MissingAccessTokenException();
-            }
+    private static final int DEFAULT_CALLBACK_PORT = 8082;
 
-            File tmpFile = null;
+    public Map.Entry<Integer, IRemoteStorage> getAvailableStorage() {
+        Map.Entry<Integer, IRemoteStorage> entry = null;
 
+//        List<CloudStorage> serviceList = new ArrayList<>();
+        for (Account account : accountService.getAllAccounts()) {
+            IRemoteStorage remoteStorage = remoteStorageFactory.make(account.getCtype(), account.getCid(), account.getCauthToken());
+            long availableSpace = 0;
             try {
-                tmpFile = makeEmptyBlock();
+                availableSpace = remoteStorage.getAvailable();
             } catch (IOException e) {
-                logger.error("failed to create empty block file", e);
+                e.printStackTrace();
+            }
+//            CloudStorage cloudStorage = remoteStorageFactory.get(account.getCtype(), DEFAULT_CALLBACK_PORT, "1z5SVQMlzHk", "1dWvvNqzfkpSeVJqYLenD5SvTVIV", account.getCid() + "");
+//
+//            boolean crTokenOk = true;
+//
+//            if (account.getCcrtoken() != null) {
+//                try {
+//                    cloudStorage.loadAsString(account.getCcrtoken());
+//                } catch (ParseException e) {
+//                    logger.error("error when parsing savedState: " + account.getCcrtoken(), e);
+//                    crTokenOk = false;
+//                }
+//            }
+//
+//            if (!crTokenOk || account.getCcrtoken() == null) {
+//                cloudStorage.login();
+//                String savedState = cloudStorage.saveAsString();
+//                accountService.updateToken(account.getCid(), savedState);
+//            }
+//
+//            SpaceAllocation allocation = cloudStorage.getAllocation();
+
+            if (availableSpace >= BLOCKSIZE) {
+                entry = new AbstractMap.SimpleEntry<>(account.getCid(), remoteStorage);
+//                entry = new AbstractMap.SimpleEntry(account.getCid(), cloudStorage);
+                break;
             }
 
-            List<String> blockNames = new ArrayList<>();
-
-            // allocate 150 x 64MB block of memory
-            // for some storage provider, they don't allow us to directly manipulate the content of uploaded files
-            // hence when updating those files, we need to explicitly create another data block and remove the old one
-            // it provides a buffer from exceed the storage limit
-            for (int i = 0; i < 150; i++) {
-                String id = UUID.randomUUID().toString();
-                blockNames.add(id + ".bin");
-            }
-
-            List<Map<String, Object>> provisionResult = null;
-
-            try {
-                provisionResult = remoteStorage.provision(tmpFile, blockNames);
-            } catch (IOException e) {
-                logger.error("failed to provision space on remote storage", e);
-            }
-
-            int len = provisionResult.size();
-
-            for (int i = 0; i < len; i++) {
-                String id = blockNames.get(i);
-                String remoteId = null;
-                String downloadLink = null;
-                Map<String, Object> tmpMap = provisionResult.get(i);
-                remoteId = (String) tmpMap.get("fileId");
-                downloadLink = (String) tmpMap.get("downloadLink"); //for pCloud only, it allows direct download of uploaded files
-
-                blockService.create(id, BLOCKSIZE, account.getCid(), remoteId, downloadLink);    //uuid, blockSize, accountName, remoteFileId
-                logger.debug("block - " + id + " (" + remoteId + ") created");
-            }
-
-            accountService.updateInitStatus(account.getCid(), true);
-
-        } else {
-            logger.debug("account: " + account.getCusername() + " already initialized");
+//            serviceList.add(cloudStorage);
         }
+        return entry;
     }
 
     public void save(String virtualPath, java.io.File file) throws IOException {
@@ -138,10 +187,123 @@ public class StorageMgr {
 
         if (isFileExists(parentPath, fileName)) {
             logger.debug("file exists: " + virtualPath);
-            return;
+            throw new FileAlreadyExistsException(virtualPath);
         }
 
         long fileSz = file.length();
+
+        if (true) {
+//            long sum = 0;
+//            CloudStorage cloudStorage = null;
+//            for (CloudStorage tmp : serviceList) {
+//                long tmpL = tmp.getAllocation().getUsed();
+//                sum += tmpL;
+//            }
+//            if (sum >= fileSz) {
+//                logger.debug("space available (needed/available): (" + fileSz + "/" + sum + ")");
+//            }else{
+//                throw new InsufficientSpaceAvailableException();
+//            }
+
+            int requiredBlks = (int) (fileSz % BLOCKSIZE == 0 ? (fileSz / BLOCKSIZE) : (fileSz / BLOCKSIZE) + 1);
+
+            fileService.create(parentPath, fileName, fileSz);
+
+            FileEntry fileEntry = fileService.getByName(parentPath, fileName);
+//
+            //for counting the remaining bytes to be written
+            long remainBytes = fileSz;
+            long bytesCnt = BLOCKSIZE;
+
+            if (fileSz < BLOCKSIZE) {
+                bytesCnt = fileSz;
+            }
+
+            java.io.File blockFile = java.io.File.createTempFile("jsocs-", ".tmp", TMP_DIR);    //this temp file will be reused
+
+            InputStream is = new FileInputStream(file);
+
+            if (fileSz < (requiredBlks * BLOCKSIZE)) {
+                is = new SequenceInputStream(is, new DummyInputStream());
+            }
+
+            IOException ioException = null;
+            RuntimeException runtimeException = null;
+
+            try (BufferedInputStream in = new BufferedInputStream(is)) {
+
+                for (int i = 0; i < requiredBlks; i++) {
+                    String id = UUID.randomUUID().toString();
+
+                    Map.Entry<Integer, IRemoteStorage> entry = this.getAvailableStorage();
+
+                    if (entry == null) {
+                        throw new InsufficientSpaceAvailableException();
+                    } else {
+
+//                        if (remainBytes < BLOCKSIZE) {
+//                            bytesCnt = remainBytes;
+//                        }
+
+                        try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(blockFile))) {
+                            IOUtils.copyLarge(in, out, 0, BLOCKSIZE);
+                            out.flush();
+
+//                            remainBytes -= bytesCnt;
+//
+//                            if (BLOCKSIZE % bytesCnt > 0) {
+//                                for (int ii = 0; ii < BLOCKSIZE - bytesCnt; ii++) {
+//                                    out.write(0);
+//                                }
+//                            }
+
+                        } catch (IOException ex) {
+                            logger.error("error when copying file content to temporary data block", ex);
+                            throw ex;
+                        }
+
+                        IRemoteStorage remoteStorage = entry.getValue();
+
+                        Map<String, Object> newInfo = remoteStorage.upload(blockFile, id);
+                        String remoteId = (String) newInfo.get("fileId");
+                        String downloadLink = (String) newInfo.get("downloadLink");
+
+                        blockService.create(id, BLOCKSIZE, entry.getKey(), remoteId, downloadLink);
+                        Block blockEntry = blockService.getByName(id);
+
+                        fileTableService.create(fileEntry.getCid(), blockEntry.getCid());
+
+                        logger.debug("before: " + remoteId + ", after: " + remoteId);
+
+
+//                        remoteStorage.upload(blockFile, )
+//                        CloudStorage cloudStorage = entry.getValue();
+//                        cloudStorage.upload(
+//                                "/" + id + ".bin",
+//                                in,
+//                                BLOCKSIZE,
+//                                true);
+
+                    }
+                }
+            } catch (IOException ex) {
+                ioException = ex;
+            } catch (RuntimeException ex) {
+                runtimeException = ex;
+            } finally {
+                blockFile.delete();
+            }
+
+            if (ioException != null || runtimeException != null) {
+                logger.debug("error occurred, deleting associated records from database");
+                fileService.deleteById(fileEntry.getCid());
+                if (ioException != null) throw ioException;
+                if (runtimeException != null) throw runtimeException;
+            }
+
+            return;
+        }
+
 
         int requiredBlks = (int) (fileSz % BLOCKSIZE == 0 ? (fileSz / BLOCKSIZE) : (fileSz / BLOCKSIZE) + 1);
 
@@ -246,6 +408,7 @@ public class StorageMgr {
         return fileExists;
     }
 
+    @Deprecated
     public void save(IRemoteStorage remoteStorage, String virtualPath, java.io.File file) throws IOException {
 
         String parentPath = FilenameUtils.getFullPath(virtualPath);
@@ -350,11 +513,14 @@ public class StorageMgr {
     public void extract(String virtualPath, java.io.File out) throws IOException {
 
         String parentPath = FilenameUtils.getFullPath(virtualPath);
+        if (parentPath!=null && !parentPath.endsWith(Constant.PATH_SEP)){
+            parentPath+=Constant.PATH_SEP;
+        }
         String fileName = FilenameUtils.getName(virtualPath);
 
-        if (isFileExists(parentPath, fileName)) {
-            logger.debug("file exists: " + virtualPath);
-            return;
+        if (!isFileExists(parentPath, fileName)) {
+            logger.debug("file not exists: " + virtualPath);
+            throw new FileNotFoundException();
         }
 
         long fileSize = -1;
@@ -381,6 +547,9 @@ public class StorageMgr {
             }
 
             try (BufferedOutputStream outStream = new BufferedOutputStream(new FileOutputStream(out, true))) {
+
+                File tmpFile = File.createTempFile("jsocs-", ".tmp", TMP_DIR);
+
                 for (int i = 0; i < fileBlocks.size(); i++) {
 
                     logger.debug("reading block-" + i);
@@ -390,8 +559,6 @@ public class StorageMgr {
                     Account account = accountService.getById(curBlock.getCaccid());
 
                     IRemoteStorage remoteStorage = remoteStorageFactory.make(account.getCtype(), account.getCid(), account.getCtoken());
-
-                    File tmpFile = File.createTempFile("jsocs-", ".tmp", TMP_DIR);
 
                     remoteStorage.download(curBlock.getCdirectlink(), tmpFile);
 
@@ -409,6 +576,7 @@ public class StorageMgr {
         }
     }
 
+    @Deprecated
     public void extract(IRemoteStorage remoteStorage, String virtualPath, java.io.File out) throws IOException {
 
         String parentPath = FilenameUtils.getFullPath(virtualPath);

@@ -14,6 +14,7 @@ public interface BlockService {
     List<Block> getByFileId(int fileId);
 
     Block getById(int blockId);
+    Block getByName(String name);
 
     void update(int blockId, String remoteId, String directLink);
     void update(int blockId, boolean inuse);
