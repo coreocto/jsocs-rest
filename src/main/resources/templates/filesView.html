@@ -222,22 +222,43 @@
             $curPath.append(finalPath);
         }).on('click', 'button.delete-btn', function () {
             var data = table.row($(this).parents('tr')).data();
-            var dialogRef = BootstrapDialog.confirm('Are you sure to delete this file?', function (result) {
-                if (result) {
+
+            BootstrapModalWrapperFactory.confirm({
+                title: "Confirm",
+                message: 'Are you sure to delete this file?',
+                onConfirmAccept: function () {
                     $.post('/api/files/d',
                         {
                             fileName: data.cpath + data.cname
                         }, function (data) {
                             if (data == 'success') {
-                                dialogRef.close();
+                                BootstrapModalWrapperFactory.alert('File deleted!');
                                 table.ajax.reload();
-                                BootstrapDialog.alert('File deleted!');
                             } else {
-                                BootstrapDialog.alert('Failed to delete file!');
+                                BootstrapModalWrapperFactory.alert('Failed to delete File!');
                             }
                         });
+                },
+                onConfirmCancel: function () {
                 }
             });
+
+            // var dialogRef = BootstrapDialog.confirm('Are you sure to delete this file?', function (result) {
+            //     if (result) {
+            //         $.post('/api/files/d',
+            //             {
+            //                 fileName: data.cpath + data.cname
+            //             }, function (data) {
+            //                 if (data == 'success') {
+            //                     dialogRef.close();
+            //                     table.ajax.reload();
+            //                     BootstrapDialog.alert('File deleted!');
+            //                 } else {
+            //                     BootstrapDialog.alert('Failed to delete file!');
+            //                 }
+            //             });
+            //     }
+            // });
 
         }).on('click', 'button.download-btn', function () {
             var data = table.row($(this).parents('tr')).data();
@@ -321,13 +342,13 @@
                     },
 
                     success: function () {
-                        alert('success');
+                        BootstrapModalWrapperFactory.alert('File uploaded!');
                         table.ajax.reload();
                     },
 
                     error: function (e) {
+                        BootstrapModalWrapperFactory.alert('Failed to upload File!');
                         console.log(e);
-                        alert('error');
                     }
                 });
             }

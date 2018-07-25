@@ -3,6 +3,8 @@ package org.coreocto.dev.jsocs.rest.nio;
 import com.cloudrail.si.exceptions.ParseException;
 import com.cloudrail.si.interfaces.CloudStorage;
 import com.cloudrail.si.types.SpaceAllocation;
+import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.commons.codec.digest.MessageDigestAlgorithms;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
 import org.coreocto.dev.jsocs.rest.Constant;
@@ -192,207 +194,69 @@ public class StorageMgr {
 
         long fileSz = file.length();
 
-        if (true) {
-//            long sum = 0;
-//            CloudStorage cloudStorage = null;
-//            for (CloudStorage tmp : serviceList) {
-//                long tmpL = tmp.getAllocation().getUsed();
-//                sum += tmpL;
-//            }
-//            if (sum >= fileSz) {
-//                logger.debug("space available (needed/available): (" + fileSz + "/" + sum + ")");
-//            }else{
-//                throw new InsufficientSpaceAvailableException();
-//            }
-
-            int requiredBlks = (int) (fileSz % BLOCKSIZE == 0 ? (fileSz / BLOCKSIZE) : (fileSz / BLOCKSIZE) + 1);
-
-            fileService.create(parentPath, fileName, fileSz);
-
-            FileEntry fileEntry = fileService.getByName(parentPath, fileName);
-//
-            //for counting the remaining bytes to be written
-            long remainBytes = fileSz;
-            long bytesCnt = BLOCKSIZE;
-
-            if (fileSz < BLOCKSIZE) {
-                bytesCnt = fileSz;
-            }
-
-            java.io.File blockFile = java.io.File.createTempFile("jsocs-", ".tmp", TMP_DIR);    //this temp file will be reused
-
-            InputStream is = new FileInputStream(file);
-
-            if (fileSz < (requiredBlks * BLOCKSIZE)) {
-                is = new SequenceInputStream(is, new DummyInputStream());
-            }
-
-            IOException ioException = null;
-            RuntimeException runtimeException = null;
-
-            try (BufferedInputStream in = new BufferedInputStream(is)) {
-
-                for (int i = 0; i < requiredBlks; i++) {
-                    String id = UUID.randomUUID().toString();
-
-                    Map.Entry<Integer, IRemoteStorage> entry = this.getAvailableStorage();
-
-                    if (entry == null) {
-                        throw new InsufficientSpaceAvailableException();
-                    } else {
-
-//                        if (remainBytes < BLOCKSIZE) {
-//                            bytesCnt = remainBytes;
-//                        }
-
-                        try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(blockFile))) {
-                            IOUtils.copyLarge(in, out, 0, BLOCKSIZE);
-                            out.flush();
-
-//                            remainBytes -= bytesCnt;
-//
-//                            if (BLOCKSIZE % bytesCnt > 0) {
-//                                for (int ii = 0; ii < BLOCKSIZE - bytesCnt; ii++) {
-//                                    out.write(0);
-//                                }
-//                            }
-
-                        } catch (IOException ex) {
-                            logger.error("error when copying file content to temporary data block", ex);
-                            throw ex;
-                        }
-
-                        IRemoteStorage remoteStorage = entry.getValue();
-
-                        Map<String, Object> newInfo = remoteStorage.upload(blockFile, id);
-                        String remoteId = (String) newInfo.get("fileId");
-                        String downloadLink = (String) newInfo.get("downloadLink");
-
-                        blockService.create(id, BLOCKSIZE, entry.getKey(), remoteId, downloadLink);
-                        Block blockEntry = blockService.getByName(id);
-
-                        fileTableService.create(fileEntry.getCid(), blockEntry.getCid());
-
-                        logger.debug("before: " + remoteId + ", after: " + remoteId);
-
-
-//                        remoteStorage.upload(blockFile, )
-//                        CloudStorage cloudStorage = entry.getValue();
-//                        cloudStorage.upload(
-//                                "/" + id + ".bin",
-//                                in,
-//                                BLOCKSIZE,
-//                                true);
-
-                    }
-                }
-            } catch (IOException ex) {
-                ioException = ex;
-            } catch (RuntimeException ex) {
-                runtimeException = ex;
-            } finally {
-                blockFile.delete();
-            }
-
-            if (ioException != null || runtimeException != null) {
-                logger.debug("error occurred, deleting associated records from database");
-                fileService.deleteById(fileEntry.getCid());
-                if (ioException != null) throw ioException;
-                if (runtimeException != null) throw runtimeException;
-            }
-
-            return;
-        }
-
-
         int requiredBlks = (int) (fileSz % BLOCKSIZE == 0 ? (fileSz / BLOCKSIZE) : (fileSz / BLOCKSIZE) + 1);
 
-        //find how much block is available for use
-        List<Block> unusedBlocks = blockService.getBlocks(false, true);
+        fileService.create(parentPath, fileName, fileSz);
 
-        //continue logic when sufficient block is available
-        if (unusedBlocks.size() >= requiredBlks) {
+        FileEntry fileEntry = fileService.getByName(parentPath, fileName);
 
-            fileService.create(parentPath, fileName, fileSz);
+        java.io.File blockFile = java.io.File.createTempFile("jsocs-", ".tmp", TMP_DIR);    //this temp file will be reused
 
-            FileEntry fileEntry = fileService.getByName(parentPath, fileName);
+        InputStream is = new FileInputStream(file);
 
-            List<Block> pendingBlocks = unusedBlocks.subList(0, requiredBlks);
+        if (fileSz < (requiredBlks * BLOCKSIZE)) {
+            is = new SequenceInputStream(is, new DummyInputStream());
+        }
 
-            int blockIdx = 0;
+        IOException ioException = null;
+        RuntimeException runtimeException = null;
 
-            //for counting the remaining bytes to be written
-            long remainBytes = fileSz;
-            long bytesCnt = BLOCKSIZE;
+        try (BufferedInputStream in = new BufferedInputStream(is)) {
 
-            if (fileSz < BLOCKSIZE) {
-                bytesCnt = fileSz;
-            }
+            for (int i = 0; i < requiredBlks; i++) {
+                String id = UUID.randomUUID().toString();
 
-            try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(file))) {
+                Map.Entry<Integer, IRemoteStorage> entry = this.getAvailableStorage();
 
-                //write data to each block
-                for (int i = 0; i < pendingBlocks.size(); i++) {
-
-                    Block block = pendingBlocks.get(i);
-
-                    Account account = accountService.getById(block.getCaccid());
-
-                    IRemoteStorage remoteStorage = remoteStorageFactory.make(account.getCtype(), account.getCid(), account.getCauthToken());
-
-                    blockService.update(block.getCid(), true);
-
-                    java.io.File blockFile = java.io.File.createTempFile("jsocs-", ".tmp", TMP_DIR);
+                if (entry == null) {
+                    throw new InsufficientSpaceAvailableException();
+                } else {
 
                     try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(blockFile))) {
+                        IOUtils.copyLarge(in, out, 0, BLOCKSIZE);
+                        out.flush();
 
-                        if (remainBytes < BLOCKSIZE) {
-                            bytesCnt = remainBytes;
-                        }
-
-                        IOUtils.copyLarge(in, out, BLOCKSIZE * blockIdx, bytesCnt);
-
-                        remainBytes -= bytesCnt;
-
-                        if (BLOCKSIZE % bytesCnt > 0) {
-                            for (int ii = 0; ii < BLOCKSIZE - bytesCnt; ii++) {
-                                out.write(0);
-                            }
-                        }
-
-                        fileTableService.create(fileEntry.getCid(), block.getCid());
-
-                    } finally {
-
+                    } catch (IOException ex) {
+                        logger.error("error when copying file content to temporary data block", ex);
+                        throw ex;
                     }
 
-                    //pCloud specific implementation
-                    long fileId = -1;
-                    try {
-                        fileId = Long.parseLong(block.getCremoteid());
-                    } catch (NumberFormatException ex) {
-                    }
+                    IRemoteStorage remoteStorage = entry.getValue();
 
-                    remoteStorage.delete(fileId);
-                    //end
-
-                    Map<String, Object> newInfo = remoteStorage.upload(blockFile, block.getCname());
+                    Map<String, Object> newInfo = remoteStorage.upload(blockFile, id);
                     String remoteId = (String) newInfo.get("fileId");
                     String downloadLink = (String) newInfo.get("downloadLink");
 
-                    blockService.update(block.getCid(), remoteId, downloadLink);
-                    blockService.update(block.getCid(), true);
+                    blockService.create(id, BLOCKSIZE, entry.getKey(), remoteId, downloadLink);
+                    Block blockEntry = blockService.getByName(id);
 
-                    logger.debug("before: " + block.getCremoteid() + ", after: " + remoteId);
+                    fileTableService.create(fileEntry.getCid(), blockEntry.getCid());
+
                 }
-
-            } finally {
-
             }
+        } catch (IOException ex) {
+            ioException = ex;
+        } catch (RuntimeException ex) {
+            runtimeException = ex;
+        } finally {
+            blockFile.delete();
+        }
 
-        } else {
-            //prompt error when insufficient block is available
-            logger.debug("insufficient space for persisting file: " + file.getName());
+        if (ioException != null || runtimeException != null) {
+            logger.debug("error occurred, deleting associated records from database");
+            fileService.deleteById(fileEntry.getCid());
+            if (ioException != null) throw ioException;
+            if (runtimeException != null) throw runtimeException;
         }
     }
 
@@ -408,113 +272,11 @@ public class StorageMgr {
         return fileExists;
     }
 
-    @Deprecated
-    public void save(IRemoteStorage remoteStorage, String virtualPath, java.io.File file) throws IOException {
-
-        String parentPath = FilenameUtils.getFullPath(virtualPath);
-        String fileName = FilenameUtils.getName(virtualPath);
-
-        if (isFileExists(parentPath, fileName)) {
-            logger.debug("file exists: " + virtualPath);
-            return;
-        }
-
-        long fileSz = file.length();
-
-        int requiredBlks = (int) (fileSz % BLOCKSIZE == 0 ? (fileSz / BLOCKSIZE) : (fileSz / BLOCKSIZE) + 1);
-
-        //find how much block is available for use
-        List<Block> unusedBlocks = blockService.getBlocks(false, true);
-
-        //continue logic when sufficient block is available
-        if (unusedBlocks.size() >= requiredBlks) {
-
-            fileService.create(parentPath, fileName, fileSz);
-
-            FileEntry fileEntry = fileService.getByName(parentPath, fileName);
-
-            List<Block> pendingBlocks = unusedBlocks.subList(0, requiredBlks);
-
-            int blockIdx = 0;
-
-            //for counting the remaining bytes to be written
-            long remainBytes = fileSz;
-            long bytesCnt = BLOCKSIZE;
-
-            if (fileSz < BLOCKSIZE) {
-                bytesCnt = fileSz;
-            }
-
-            try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(file))) {
-
-                //write data to each block
-                for (int i = 0; i < pendingBlocks.size(); i++) {
-
-                    Block block = pendingBlocks.get(i);
-
-                    blockService.update(block.getCid(), true);
-
-                    java.io.File blockFile = java.io.File.createTempFile("jsocs-", ".tmp", TMP_DIR);
-
-                    try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(blockFile))) {
-
-                        if (remainBytes < BLOCKSIZE) {
-                            bytesCnt = remainBytes;
-                        }
-
-                        IOUtils.copyLarge(in, out, BLOCKSIZE * blockIdx, bytesCnt);
-
-                        remainBytes -= bytesCnt;
-
-                        if (BLOCKSIZE % bytesCnt > 0) {
-                            for (int ii = 0; ii < BLOCKSIZE - bytesCnt; ii++) {
-                                out.write(0);
-                            }
-                        }
-
-                        fileTableService.create(fileEntry.getCid(), block.getCid());
-
-                    } finally {
-
-                    }
-
-                    long fileId = -1;
-                    try {
-                        fileId = Long.parseLong(block.getCremoteid());
-                    } catch (NumberFormatException ex) {
-
-                    }
-
-                    remoteStorage.delete(fileId);
-
-                    String remoteId = null;
-                    String downloadLink = null;
-
-                    Map<String, Object> newInfo = remoteStorage.upload(blockFile, block.getCname());
-                    remoteId = (String) newInfo.get("fileId");
-                    downloadLink = (String) newInfo.get("downloadLink");
-
-                    blockService.update(block.getCid(), remoteId, downloadLink);
-                    blockService.update(block.getCid(), true);
-
-                    logger.debug("before: " + block.getCremoteid() + ", after: " + remoteId);
-                }
-
-            } finally {
-
-            }
-
-        } else {
-            //prompt error when insufficient block is available
-            logger.debug("insufficient space for persisting file: " + file.getName());
-        }
-    }
-
     public void extract(String virtualPath, java.io.File out) throws IOException {
 
         String parentPath = FilenameUtils.getFullPath(virtualPath);
-        if (parentPath!=null && !parentPath.endsWith(Constant.PATH_SEP)){
-            parentPath+=Constant.PATH_SEP;
+        if (parentPath != null && !parentPath.endsWith(Constant.PATH_SEP)) {
+            parentPath += Constant.PATH_SEP;
         }
         String fileName = FilenameUtils.getName(virtualPath);
 
@@ -559,65 +321,6 @@ public class StorageMgr {
                     Account account = accountService.getById(curBlock.getCaccid());
 
                     IRemoteStorage remoteStorage = remoteStorageFactory.make(account.getCtype(), account.getCid(), account.getCtoken());
-
-                    remoteStorage.download(curBlock.getCdirectlink(), tmpFile);
-
-                    try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(tmpFile))) {
-                        long byteCnt = (i == fileBlocks.size() - 1) ? fileSize % BLOCKSIZE : BLOCKSIZE;
-                        IOUtils.copyLarge(in, outStream, 0, byteCnt);
-                    } finally {
-
-                    }
-                }
-
-            } catch (IOException e) {
-                logger.error(e.getMessage(), e);
-            }
-        }
-    }
-
-    @Deprecated
-    public void extract(IRemoteStorage remoteStorage, String virtualPath, java.io.File out) throws IOException {
-
-        String parentPath = FilenameUtils.getFullPath(virtualPath);
-        String fileName = FilenameUtils.getName(virtualPath);
-
-        if (isFileExists(parentPath, fileName)) {
-            logger.debug("file exists: " + virtualPath);
-            return;
-        }
-
-        long fileSize = -1;
-
-        FileEntry fileEntry = null;
-
-        try {
-            fileEntry = fileService.getByName(parentPath, fileName);
-        } catch (Exception ex) {
-        }
-
-        if (fileEntry != null) {
-
-            fileSize = fileEntry.getCsize();
-
-            List<Block> fileBlocks = blockService.getByFileId(fileEntry.getCid());
-
-            //provision input stream from occupied blocks and concatenate them together according to their order (defined by cid)
-//            InputStream in = null;
-//            InputStream prevInputStream = null;
-
-            if (out.exists()) {
-                out.delete();
-            }
-
-            try (BufferedOutputStream outStream = new BufferedOutputStream(new FileOutputStream(out, true))) {
-                for (int i = 0; i < fileBlocks.size(); i++) {
-
-                    logger.debug("reading block-" + i);
-
-                    Block curBlock = fileBlocks.get(i);
-
-                    File tmpFile = File.createTempFile("jsocs-", ".tmp", new File("r:\\temp"));
 
                     remoteStorage.download(curBlock.getCdirectlink(), tmpFile);
 
