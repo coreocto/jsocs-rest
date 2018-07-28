@@ -1,13 +1,18 @@
 package org.coreocto.dev.jsocs.rest.pojo;
 
-import javax.persistence.*;
 import java.util.Date;
 
-@Entity
-@Table(name = "tfiles")
-public class FileEntry {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+public class ExtendedFileEntry {
+    private String cfullpath;
+
+    public String getCfullpath() {
+        return cfullpath;
+    }
+
+    public void setCfullpath(String cfullpath) {
+        this.cfullpath = cfullpath;
+    }
+
     private Integer cid;
     private String cname;
     private Date ccrtdt;

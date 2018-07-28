@@ -142,7 +142,9 @@ public class PCloudRSImpl implements IRemoteStorage {
         if (updateSuccess) {
             String remoteChecksum = this.getChecksum(remoteFile.fileId());
             logger.debug("local checksum: " + hex + ", remote checksum: " + remoteChecksum);
+
             if (!hex.equals(remoteChecksum)) {
+                delete(remoteFile.fileId());
                 throw new InvalidChecksumException();
             }
         }

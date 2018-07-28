@@ -15,7 +15,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.HandlerMapping;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -38,6 +40,11 @@ public class PageController {
 
     @Autowired
     FileService fileService;
+
+    @RequestMapping("/")
+    public String viewLogin(){
+        return "login";
+    }
 
     @RequestMapping("/accounts")
     public String viewAccounts(Model model) {
@@ -84,62 +91,64 @@ public class PageController {
     @Autowired
     StorageMgr storageMgr;
 
-    @RequestMapping(value = "/files/download/{filePath}", method = RequestMethod.GET)
-    public void downloadFile(@PathVariable("filePath") String filePath,
-                             HttpServletResponse response) {
-
-        //check whether the target file exists
-        long fileSize = -1;
-
-        FileEntry fileEntry = null;
-
-        String parentPath = FilenameUtils.getFullPath(filePath);
-        if (parentPath!=null && !parentPath.endsWith(Constant.PATH_SEP)){
-            parentPath+=Constant.PATH_SEP;
-        }
-        String fileName = FilenameUtils.getName(filePath);
-
-        try {
-            fileEntry = fileService.getByName(parentPath, fileName);
-        } catch (Exception ex) {
-
-        }
-
-        if (fileEntry != null) {
-
-            fileSize = fileEntry.getCsize();
-
-            java.io.File tmpFile = null;
-
-            try {
-                tmpFile = java.io.File.createTempFile("jsocs-", ".tmp", new java.io.File("r:\\temp"));
-                storageMgr.extract(fileName, tmpFile);
-            } catch (IOException ex) {
-                ex.printStackTrace();
-            }
-
-            List<Block> fileBlocks = blockService.getByFileId(fileEntry.getCid());
-
-            //create input stream from occupied blocks and concatenate them together according to their order (defined by cid)
-//            InputStream in = null;
-//            InputStream prevInputStream = null;
-
-            response.setContentType("application/octet-stream");
-            response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
-
-            try (
-                    BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(tmpFile));
-                    BufferedOutputStream outStream = new BufferedOutputStream(response.getOutputStream());
-            ) {
-
-                org.apache.commons.io.IOUtils.copy(inputStream, outStream);
-                outStream.flush();
-
-            } catch (IOException e) {
-//                logger.error(e.getMessage(), e);
-            }
-        } else {
-
-        }
-    }
+//    @RequestMapping(value = "/files/download/**", method = RequestMethod.GET)
+//    public void downloadFile(HttpServletRequest request,
+//                             HttpServletResponse response) {
+//
+//        String filePath = (String)
+//                request.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
+//        filePath = filePath.substring("/files/download/".length()-1);
+//
+//        //check whether the target file exists
+//        long fileSize = -1;
+//
+//        FileEntry fileEntry = null;
+//
+//        String parentPath = FilenameUtils.getFullPathNoEndSeparator(filePath);
+//        String fileName = FilenameUtils.getName(filePath);
+//
+//        try {
+//            FileEntry parent = fileService.getByPath(parentPath);
+//            fileEntry = fileService.getByParentAndName(parent.getCid(), fileName);
+//        } catch (Exception ex) {
+//
+//        }
+//
+//        if (fileEntry != null) {
+//
+//            fileSize = fileEntry.getCsize();
+//
+//            java.io.File tmpFile = null;
+//
+//            try {
+//                tmpFile = java.io.File.createTempFile("jsocs-", ".tmp", new java.io.File("r:\\temp"));
+//                storageMgr.extract(filePath, tmpFile);
+//            } catch (IOException ex) {
+//                ex.printStackTrace();
+//            }
+//
+//            List<Block> fileBlocks = blockService.getByFileId(fileEntry.getCid());
+//
+//            //create input stream from occupied blocks and concatenate them together according to their order (defined by cid)
+////            InputStream in = null;
+////            InputStream prevInputStream = null;
+//
+//            response.setContentType("application/octet-stream");
+//            response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
+//
+//            try (
+//                    BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(tmpFile));
+//                    BufferedOutputStream outStream = new BufferedOutputStream(response.getOutputStream());
+//            ) {
+//
+//                org.apache.commons.io.IOUtils.copy(inputStream, outStream);
+//                outStream.flush();
+//
+//            } catch (IOException e) {
+////                logger.error(e.getMessage(), e);
+//            }
+//        } else {
+//
+//        }
+//    }
 }
