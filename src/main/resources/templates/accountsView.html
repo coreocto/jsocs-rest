@@ -85,7 +85,10 @@
 <script>
     $(function () {
         var table = $("#accTable").DataTable({
-            "ajax": "/api/accounts/r",
+            "ajax": {
+                url: "/api/accounts",
+                type: "GET"
+            },
             "columns": [
                 {
                     "title": "Account Name",
@@ -134,17 +137,18 @@
                     title: "Confirm",
                     message: 'Are you sure to remove this account?',
                     onConfirmAccept: function () {
-                        $.post('/api/accounts/d',
-                            {
-                                userId: data.cid
-                            }, function (data) {
-                                if (data == 'success') {
+                        $.ajax({
+                            url: '/api/accounts/' + (data.cid),
+                            type: 'DELETE',
+                            success: function (response) {
+                                if (response == 'success') {
                                     BootstrapModalWrapperFactory.alert('Account deleted!');
                                     table.ajax.reload();
                                 } else {
                                     BootstrapModalWrapperFactory.alert('Failed to delete account!');
                                 }
-                            });
+                            }
+                        });
                     },
                     onConfirmCancel: function () {
                     }
@@ -169,7 +173,45 @@
             .on('click', 'button.refresh-btn', function(){
                 var data = table.row($(this).parents('tr')).data();
 
-                window.open('https://my.pcloud.com/oauth2/authorize?client_id=1z5SVQMlzHk&response_type=code&redirect_uri=http://localhost:8080');
+                $.ajax({
+                    url: '/oauth?userId=' + (data.cid),
+                    type: 'GET',
+                    dataType: 'json',
+                    success: function (response) {
+                        console.log(response);
+                        console.log(response.status);
+                        if (response.status == 'success') {
+                        //     BootstrapModalWrapperFactory.createModal({
+                        //         message: '<iframe src="'+response.url+'"></iframe>',//<div class="text-center">Loading</div>',
+                        //         closable: true,
+                        //         title: "AJAX Content",
+                        //         closeByBackdrop: false,
+                        //         // url: response.url,
+                        //         buttons: [
+                        //             {
+                        //                 label: "Cancel",
+                        //                 cssClass: "btn btn-secondary",
+                        //                 action: function (modalWrapper, button, buttonData, originalEvent) {
+                        //                     return modalWrapper.hide();
+                        //                 }
+                        //             },
+                        //             {
+                        //                 label: "OK",
+                        //                 cssClass: "btn btn-primary",
+                        //                 action: function (modalWrapper, button, buttonData, originalEvent) {
+                        //                     return modalWrapper.hide();
+                        //                 }
+                        //             }
+                        //         ]
+                        //     }).show();
+                            window.open(response.url);
+                        } else {
+                            BootstrapModalWrapperFactory.alert('Failed to perform oauth sequence!');
+                        }
+                    }
+                });
+
+                // window.open('https://my.pcloud.com/oauth2/authorize?client_id=1z5SVQMlzHk&response_type=code&redirect_uri=http://localhost:8080');
 
                 // BootstrapDialog.show({
                 //     message: function (dialog) {
@@ -211,7 +253,7 @@
                         label: "Add",
                         cssClass: "btn btn-primary",
                         action: function (modalWrapper, button, buttonData, originalEvent) {
-                            $.post('/api/accounts/c', {
+                            $.post('/api/accounts', {
                                 username: $("#accountName").val(),
                                 type: $("#type").val()
                             }).done(function (data) {

@@ -1,28 +1,17 @@
 package org.coreocto.dev.jsocs.rest.ctrl;
 
-import org.apache.commons.io.FilenameUtils;
 import org.coreocto.dev.jsocs.rest.Constant;
-import org.coreocto.dev.jsocs.rest.db.AccountService;
-import org.coreocto.dev.jsocs.rest.db.BlockService;
-import org.coreocto.dev.jsocs.rest.db.FileService;
-import org.coreocto.dev.jsocs.rest.nio.StorageMgr;
-import org.coreocto.dev.jsocs.rest.pojo.Account;
+import org.coreocto.dev.jsocs.rest.nio.StorageManager;
 import org.coreocto.dev.jsocs.rest.pojo.Block;
-import org.coreocto.dev.jsocs.rest.pojo.FileEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -30,26 +19,19 @@ import java.util.Optional;
 @Controller
 public class PageController {
 
-    Logger logger = LoggerFactory.getLogger(PageController.class);
+    private Logger logger = LoggerFactory.getLogger(PageController.class);
 
     @Autowired
-    AccountService accountService;
-
-    @Autowired
-    BlockService blockService;
-
-    @Autowired
-    FileService fileService;
+    StorageManager storageMgr;
 
     @RequestMapping("/")
-    public String viewLogin(){
+    public String viewLogin() {
+        storageMgr.init();
         return "login";
     }
 
     @RequestMapping("/accounts")
     public String viewAccounts(Model model) {
-        List<Account> accountList = accountService.getAllAccounts();
-        model.addAttribute("accountList", accountList);
         return "accountsView";
     }
 
@@ -87,68 +69,4 @@ public class PageController {
 
         return "filesView";
     }
-
-    @Autowired
-    StorageMgr storageMgr;
-
-//    @RequestMapping(value = "/files/download/**", method = RequestMethod.GET)
-//    public void downloadFile(HttpServletRequest request,
-//                             HttpServletResponse response) {
-//
-//        String filePath = (String)
-//                request.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
-//        filePath = filePath.substring("/files/download/".length()-1);
-//
-//        //check whether the target file exists
-//        long fileSize = -1;
-//
-//        FileEntry fileEntry = null;
-//
-//        String parentPath = FilenameUtils.getFullPathNoEndSeparator(filePath);
-//        String fileName = FilenameUtils.getName(filePath);
-//
-//        try {
-//            FileEntry parent = fileService.getByPath(parentPath);
-//            fileEntry = fileService.getByParentAndName(parent.getCid(), fileName);
-//        } catch (Exception ex) {
-//
-//        }
-//
-//        if (fileEntry != null) {
-//
-//            fileSize = fileEntry.getCsize();
-//
-//            java.io.File tmpFile = null;
-//
-//            try {
-//                tmpFile = java.io.File.createTempFile("jsocs-", ".tmp", new java.io.File("r:\\temp"));
-//                storageMgr.extract(filePath, tmpFile);
-//            } catch (IOException ex) {
-//                ex.printStackTrace();
-//            }
-//
-//            List<Block> fileBlocks = blockService.getByFileId(fileEntry.getCid());
-//
-//            //create input stream from occupied blocks and concatenate them together according to their order (defined by cid)
-////            InputStream in = null;
-////            InputStream prevInputStream = null;
-//
-//            response.setContentType("application/octet-stream");
-//            response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
-//
-//            try (
-//                    BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(tmpFile));
-//                    BufferedOutputStream outStream = new BufferedOutputStream(response.getOutputStream());
-//            ) {
-//
-//                org.apache.commons.io.IOUtils.copy(inputStream, outStream);
-//                outStream.flush();
-//
-//            } catch (IOException e) {
-////                logger.error(e.getMessage(), e);
-//            }
-//        } else {
-//
-//        }
-//    }
 }

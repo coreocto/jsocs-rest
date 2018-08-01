@@ -1,20 +1,26 @@
 package org.coreocto.dev.jsocs.rest.pojo;
 
+import javax.persistence.*;
+
+@Entity
+@Table(name = "tblock")
 public class Block {
-    private int cid;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer cid;
     private String cname;
-    private int cuse;
+    private Integer cuse;
     private long csize;
     private String cremoteid;
     private String cowner;
     private String cdirectlink;
-    private int caccid;
+    private Integer caccid;
 
-    public int getCaccid() {
+    public Integer getCaccid() {
         return caccid;
     }
 
-    public void setCaccid(int caccid) {
+    public void setCaccid(Integer caccid) {
         this.caccid = caccid;
     }
 
@@ -34,11 +40,11 @@ public class Block {
         this.cowner = cowner;
     }
 
-    public int getCid() {
+    public Integer getCid() {
         return cid;
     }
 
-    public void setCid(int cid) {
+    public void setCid(Integer cid) {
         this.cid = cid;
     }
 
@@ -50,11 +56,11 @@ public class Block {
         this.cname = cname;
     }
 
-    public int getCuse() {
+    public Integer getCuse() {
         return cuse;
     }
 
-    public void setCuse(int cuse) {
+    public void setCuse(Integer cuse) {
         this.cuse = cuse;
     }
 

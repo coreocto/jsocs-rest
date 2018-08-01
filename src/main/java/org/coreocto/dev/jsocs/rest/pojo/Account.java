@@ -1,13 +1,18 @@
 package org.coreocto.dev.jsocs.rest.pojo;
 
+import javax.persistence.*;
 import java.util.Date;
 
+@Entity
+@Table(name = "taccounts")
 public class Account {
-    private int cid;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer cid;
     private Date ccrtdt;
     private String cusername;
     private String cpassword;
-    private int cinit;
+    private Integer cinit;
     private String ctoken;
     private String cauthToken;
     private String ctype;
@@ -45,19 +50,19 @@ public class Account {
         this.cauthToken = cauthToken;
     }
 
-    public int getCinit() {
+    public Integer getCinit() {
         return cinit;
     }
 
-    public void setCinit(int cinit) {
+    public void setCinit(Integer cinit) {
         this.cinit = cinit;
     }
 
-    public int getCid() {
+    public Integer getCid() {
         return cid;
     }
 
-    public void setCid(int cid) {
+    public void setCid(Integer cid) {
         this.cid = cid;
     }
 

@@ -8,8 +8,7 @@
     <ul class="list-unstyled components">
         <li th:classappend="${currentPage=='accounts'} ? 'active':''">
             <a href="/accounts">
-                <i class="fas fa-home"></i>
-                Accounts
+                <span class="oi oi-people" title="icon name" aria-hidden="true"></span>&nbsp;&nbsp;Accounts
             </a>
             <!--<ul class="collapse list-unstyled" id="homeSubmenu">-->
                 <!--<li>-->
@@ -25,8 +24,7 @@
         </li>
         <li th:classappend="${currentPage=='files'} ? 'active':''">
             <a href="/files">
-                <i class="fas fa-briefcase"></i>
-                Files
+                <span class="oi oi-file"></span>&nbsp;&nbsp;Files
             </a>
             <!--<a href="#pageSubmenu" data-toggle="collapse" aria-expanded="false" class="dropdown-toggle">-->
                 <!--<i class="fas fa-copy"></i>-->

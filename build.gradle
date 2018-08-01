@@ -13,15 +13,21 @@ buildscript {
 plugins {
     id 'java'
     id 'application'
+    id 'idea'
 }
 
 apply plugin: 'org.springframework.boot'
 apply plugin: 'io.spring.dependency-management'
 
+bootJar {
+    baseName = 'org.coreocto.dev.jsocs.rest'
+    version = '1.0'
+}
+
 group 'org.coreocto.dev'
 version '1.0-SNAPSHOT'
 
-mainClassName = 'org.coreocto.dev.jsocs.client.JsocsJavaClientApp'
+mainClassName = 'org.coreocto.dev.jsocs.rest.Main'
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
@@ -45,9 +51,9 @@ dependencies {
     testCompile('org.springframework.boot:spring-boot-starter-test')
     testCompile group: 'junit', name: 'junit', version: '4.12'
     compile('org.slf4j:slf4j-jdk14:1.7.25')
-    compile 'com.google.api-client:google-api-client:1.23.0'
-    compile 'com.google.oauth-client:google-oauth-client-jetty:1.23.0'
-    compile 'com.google.apis:google-api-services-drive:v3-rev110-1.23.0'
+//    compile 'com.google.api-client:google-api-client:1.23.0'
+//    compile 'com.google.oauth-client:google-oauth-client-jetty:1.23.0'
+//    compile 'com.google.apis:google-api-services-drive:v3-rev110-1.23.0'
     // https://mvnrepository.com/artifact/postgresql/postgresql
     compile group: 'org.postgresql', name: 'postgresql', version: '9.3-1102-jdbc41'
     // https://mvnrepository.com/artifact/commons-io/commons-io
@@ -57,10 +63,13 @@ dependencies {
     // https://mvnrepository.com/artifact/commons-codec/commons-codec
     compile group: 'commons-codec', name: 'commons-codec', version: '1.11'
 
-    compile 'com.pcloud.sdk:java-core:1.0.1'
+//    compile 'com.pcloud.sdk:java-core:1.0.1'
 
     // https://mvnrepository.com/artifact/org.seleniumhq.selenium/selenium-java
     compile group: 'org.seleniumhq.selenium', name: 'selenium-java', version: '3.13.0'
+    // required by selenium, https://mvnrepository.com/artifact/com.google.guava/guava
+    compile group: 'com.google.guava', name: 'guava', version: '25.1-jre'
 
     compile 'com.cloudrail:cloudrail-si-java:2.21.9'
+    runtime 'com.mashape.unirest:unirest-java:1.4.9'
 }

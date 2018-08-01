@@ -1,9 +1,23 @@
 package org.coreocto.dev.jsocs.rest.pojo;
 
+import javax.persistence.*;
 import java.util.Date;
 
+@Entity
+@Table(name = "tfiles")
 public class ExtendedFileEntry {
+
+//    @Transient
     private String cfullpath;
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer cid;
+    private String cname;
+    private Date ccrtdt;
+    private Long csize;
+    private Integer cisdir;
+    private Integer cparent;
 
     public String getCfullpath() {
         return cfullpath;
@@ -12,13 +26,6 @@ public class ExtendedFileEntry {
     public void setCfullpath(String cfullpath) {
         this.cfullpath = cfullpath;
     }
-
-    private Integer cid;
-    private String cname;
-    private Date ccrtdt;
-    private Long csize;
-    private Integer cisdir;
-    private Integer cparent;
 
     public Integer getCparent() {
         return cparent;

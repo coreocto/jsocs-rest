@@ -1,23 +1,20 @@
 package org.coreocto.dev.jsocs.rest.pojo;
 
+import javax.persistence.EmbeddedId;
+import javax.persistence.Entity;
+import javax.persistence.Table;
+
+@Entity
+@Table(name = "tfiletable")
 public class FileTable {
-    private int cfileid;
+    @EmbeddedId
+    private FileTableId id;
 
-    public int getCfileid() {
-        return cfileid;
+    public FileTableId getId() {
+        return id;
     }
 
-    public void setCfileid(int cfileid) {
-        this.cfileid = cfileid;
+    public void setId(FileTableId id) {
+        this.id = id;
     }
-
-    public int getCblkid() {
-        return cblkid;
-    }
-
-    public void setCblkid(int cblkid) {
-        this.cblkid = cblkid;
-    }
-
-    private int cblkid;
 }

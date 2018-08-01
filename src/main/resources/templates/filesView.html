@@ -148,7 +148,7 @@
                                     BootstrapModalWrapperFactory.alert('Failed to delete File!');
                                 }
                             }
-                        })
+                        });
                     },
                     onConfirmCancel: function () {
                     }
@@ -174,7 +174,11 @@
 
             if (file.size > 0) {
                 $("#upload-filename").text(file.name);
-                $("#upload-path").val(curPath + '/' + file.name);
+                if (curPath=='/'){
+                    $("#upload-path").val(curPath + file.name);
+                }else{
+                    $("#upload-path").val(curPath + '/' + file.name);
+                }
                 $("#upload-percent").text('0');
 
                 $(".progress-bar")
