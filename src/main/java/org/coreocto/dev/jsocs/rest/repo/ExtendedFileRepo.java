@@ -35,7 +35,6 @@ public interface ExtendedFileRepo extends JpaRepository<ExtendedFileEntry, Integ
     @Query("delete from ExtendedFileEntry where cname = ?1 and cpath = ?2")
     void deleteByName(String name, String path);
 
-
     @Query(value = "WITH RECURSIVE my_tree AS (\n" +
             "select cid,cname,ccrtdt,csize,cisdir,cparent, coalesce(cname,'/') cfullpath from tfiles where cparent is null\n" +
             "union\n" +
@@ -68,5 +67,17 @@ public interface ExtendedFileRepo extends JpaRepository<ExtendedFileEntry, Integ
             , nativeQuery = true)
     @QueryHints({ @QueryHint(name = "org.hibernate.cacheable", value ="false") })
     List<ExtendedFileEntry> findFileEntriesByPathWithParent(String path);
+
+    @Query(value = "WITH RECURSIVE my_tree AS (\n" +
+            "select cid,cname,ccrtdt,csize,cisdir,cparent, coalesce(cname,'/') cfullpath, -1 corder from tfiles where cparent is null\n" +
+            "union\n" +
+            "select b.cid,b.cname,b.ccrtdt,b.csize,b.cisdir,b.cparent, (case when aaa.cfullpath = '/' then '' else aaa.cfullpath end)||'/'||b.cname cfullpath, (case when b.cisdir = 0 then 1 else 0 end) corder from my_tree aaa, tfiles b where aaa.cid = b.cparent\n" +
+            ")\n" +
+            // the 0-cid value here is mandatory to make cname displayed as ..
+            // it seems that jpa have cached the value of name and does not let us to override it
+            "select exists(select 1 from my_tree where cfullpath=?1)"
+            , nativeQuery = true)
+    @QueryHints({ @QueryHint(name = "org.hibernate.cacheable", value ="false") })
+    boolean existsByPath(String path);
 
 }

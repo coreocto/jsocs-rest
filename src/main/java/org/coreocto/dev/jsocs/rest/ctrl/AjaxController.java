@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import org.apache.commons.io.FilenameUtils;
 import org.coreocto.dev.jsocs.rest.Constant;
 import org.coreocto.dev.jsocs.rest.config.AppConfig;
+import org.coreocto.dev.jsocs.rest.exception.FolderNotFoundException;
+import org.coreocto.dev.jsocs.rest.exception.InvalidCryptoParamException;
 import org.coreocto.dev.jsocs.rest.nio.StorageManager;
 import org.coreocto.dev.jsocs.rest.pojo.Account;
 import org.coreocto.dev.jsocs.rest.pojo.ExtendedFileEntry;
@@ -20,43 +22,24 @@ import org.springframework.web.servlet.HandlerMapping;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.*;
+import java.nio.file.FileAlreadyExistsException;
 import java.util.List;
 import java.util.Optional;
-
-//import org.coreocto.dev.jsocs.rest.db.FileService;
-//import org.coreocto.dev.jsocs.rest.nio.RemoteStorageFactory;
 
 @RestController
 public class AjaxController {
 
+    private final Logger logger = LoggerFactory.getLogger(AjaxController.class);
     @Autowired
     StorageManager storageMgr;
-
-//    @Autowired
-//    AccountService accountService;
-
-//    @Autowired
-//    FileService fileService;
-
-//    @Autowired
-//    BlockService blockService;
-
-//    @Autowired
-//    RemoteStorageFactory remoteStorageFactory;
-
     @Autowired
     FileRepo fileRepo;
-
     @Autowired
     ExtendedFileRepo extendedFileRepo;
-
     @Autowired
     AccountRepo accountRepo;
-
     @Autowired
     AppConfig appConfig;
-
-    private final Logger logger = LoggerFactory.getLogger(AjaxController.class);
 
     //accounts
     private boolean isAccountExists(String username, String type) {
@@ -128,30 +111,30 @@ public class AjaxController {
 
         boolean success = true;
 
-        if (file.isPresent()) {
+        try {
+            if (file.isPresent()) {
+                File tmpDir = new File(appConfig.APP_TEMP_DIR);
 
-            File targetFile = null;
-
-            File tmpDir = new File(appConfig.APP_TEMP_DIR);
-
-            try {
-                targetFile = new File(tmpDir, file.get().getOriginalFilename());
+                File targetFile = new File(tmpDir, file.get().getOriginalFilename());
                 file.get().transferTo(targetFile);
-            } catch (IOException e) {
-                logger.error("error when copying uploaded file to temp folder", e);
-                success = false;
-            }
 
-            if (success) {
-                try {
+                if (success) {
                     storageMgr.save(path, targetFile);
-                } catch (IOException e) {
-                    logger.error("error when uploading file to remote storage", e);
-                    success = false;
                 }
+            } else if (folder.isPresent()) {
+                storageMgr.makeDir(path, folder.get());
             }
-        } else if (folder.isPresent()) {
-            storageMgr.makeDir(path, folder.get());
+        } catch (FolderNotFoundException e) {
+            e.printStackTrace();
+        } catch (FileAlreadyExistsException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            logger.error("error when uploading file to remote storage", e);
+            success = false;
+        } catch (InvalidCryptoParamException e) {
+            e.printStackTrace();
+        } finally {
+
         }
 
         if (success) {
@@ -163,7 +146,12 @@ public class AjaxController {
 
     @GetMapping("/api/files")
     public String listFiles() {
-        List<ExtendedFileEntry> entries = extendedFileRepo.findFileEntriesByPath(Constant.PATH_SEP);
+        List<ExtendedFileEntry> entries = null;
+        try {
+            entries = storageMgr.list(Constant.PATH_SEP);
+        } catch (FolderNotFoundException e) {
+            e.printStackTrace();
+        }
         return "{ \"data\":" + new Gson().toJson(entries) + " }";
     }
 
@@ -175,70 +163,64 @@ public class AjaxController {
 
         String newPath = pathMassage(path);
 
-//        FileEntry fileEntry = null;
-
-//        String parentPath = FilenameUtils.getFullPathNoEndSeparator(newPath);
         String fileName = FilenameUtils.getName(newPath);
 
         ExtendedFileEntry fileEntry = extendedFileRepo.findFileEntryByPath(path);
-//        try {
-//            FileEntry parent = fileRepogetByPath(parentPath);
-//            fileEntry = fileService.getByParentAndName(parent.getCid(), fileName);
-//        } catch (Exception ex) {
-//
-//        }
 
-        if (fileEntry == null) {
-            response.setContentType("application/json");
-            try (PrintWriter out = response.getWriter()) {
-                out.write("{\"status\":\"error\", \"message\":\"file not found\"}");
-                out.flush();
-            } catch (IOException ex) {
+        try {
+
+            if (fileEntry == null) {
+                response.setContentType("application/json");
+                try (PrintWriter out = response.getWriter()) {
+                    out.write("{\"status\":\"error\", \"message\":\"file not found\"}");
+                    out.flush();
+                } finally {
+
+                }
+                return;
             }
-            return;
-        }
 
-        if (new Integer(0).equals(fileEntry.getCisdir())) {
+            if (new Integer(0).equals(fileEntry.getCisdir())) {
 
-            java.io.File tmpFile = null;
+                boolean success = true;
 
-            boolean success = true;
+                File tmpDir = new File(appConfig.APP_TEMP_DIR);
 
-            File tmpDir = new File(appConfig.APP_TEMP_DIR);
+                java.io.File tmpFile = java.io.File.createTempFile("jsocs-", ".tmp", tmpDir);
 
-            try {
-                tmpFile = java.io.File.createTempFile("jsocs-", ".tmp", tmpDir);
                 storageMgr.extract(newPath, tmpFile);
-            } catch (IOException ex) {
-                logger.error("error when downloading file from remote storage", ex);
-                success = false;
-            }
 
-            if (success) {
-                response.setContentType("application/octet-stream");
-                response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
+                if (success) {
+                    response.setContentType("application/octet-stream");
+                    response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
 
-                try (
-                        BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(tmpFile));
-                        BufferedOutputStream outStream = new BufferedOutputStream(response.getOutputStream());
-                ) {
+                    try (
+                            BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(tmpFile));
+                            BufferedOutputStream outStream = new BufferedOutputStream(response.getOutputStream());
+                    ) {
 
-                    org.apache.commons.io.IOUtils.copy(inputStream, outStream);
-                    outStream.flush();
+                        org.apache.commons.io.IOUtils.copy(inputStream, outStream);
+                        outStream.flush();
 
-                } catch (IOException ex) {
-                    logger.error("error when writing file to response", ex);
-                    success = false;
+                    } finally {
+
+                    }
+                }
+            } else {
+                response.setContentType("application/json");
+                List<ExtendedFileEntry> entries = extendedFileRepo.findFileEntriesByPathWithParent(newPath);
+                try (PrintWriter out = response.getWriter()) {
+                    out.write("{ \"data\":" + new Gson().toJson(entries) + " }");
+                    out.flush();
+                } finally {
+
                 }
             }
-        } else {
-            response.setContentType("application/json");
-            List<ExtendedFileEntry> entries = extendedFileRepo.findFileEntriesByPathWithParent(newPath);
-            try (PrintWriter out = response.getWriter()) {
-                out.write("{ \"data\":" + new Gson().toJson(entries) + " }");
-                out.flush();
-            } catch (IOException ex) {
-            }
+
+        } catch (IOException ex) {
+
+        } catch (InvalidCryptoParamException e) {
+            e.printStackTrace();
         }
     }
 

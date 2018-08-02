@@ -9,8 +9,7 @@ import org.apache.commons.io.IOUtils;
 import org.coreocto.dev.jsocs.rest.Constant;
 import org.coreocto.dev.jsocs.rest.cloudrail.CustomLocalReceiver;
 import org.coreocto.dev.jsocs.rest.config.AppConfig;
-import org.coreocto.dev.jsocs.rest.exception.InsufficientSpaceAvailableException;
-import org.coreocto.dev.jsocs.rest.exception.InvalidChecksumException;
+import org.coreocto.dev.jsocs.rest.exception.*;
 import org.coreocto.dev.jsocs.rest.pojo.*;
 import org.coreocto.dev.jsocs.rest.repo.*;
 import org.slf4j.Logger;
@@ -117,7 +116,7 @@ public class StorageManager {
         }
     }
 
-    public Map.Entry<Integer, CloudStorage> getAvailableStorage() {
+    public Map.Entry<Integer, CloudStorage> getNextAvailableStorage() {
         Map.Entry<Integer, CloudStorage> result = null;
 
         synchronized (storageMap) {
@@ -134,28 +133,69 @@ public class StorageManager {
         return result;
     }
 
-    public void save(String virtualPath, java.io.File file) throws IOException {
+    /**
+     * Return a list of files of given folder
+     *
+     * @param path
+     * @return children of given folder
+     * @throws FolderNotFoundException
+     */
+    public List<ExtendedFileEntry> list(String path) throws FolderNotFoundException {
+        String newPath = null;
+        if (path == null) {
+            newPath = Constant.PATH_SEP;
+        } else {
+            newPath = path;
+        }
+
+        boolean exists = extendedFileRepo.existsByPath(newPath);
+
+        if (!exists) {
+            throw new FolderNotFoundException(path);
+        }
+
+        return extendedFileRepo.findFileEntriesByPath(newPath);
+    }
+
+    /**
+     * Save the file object to the given path
+     *
+     * @param virtualPath the path to be saved to
+     * @param file        the file to be saved
+     * @throws IOException
+     */
+    public void save(String virtualPath, java.io.File file) throws IOException, InvalidCryptoParamException {
 
         init();
 
         String parentPath = FilenameUtils.getFullPathNoEndSeparator(virtualPath);
         String fileName = FilenameUtils.getName(virtualPath);
 
+        boolean parentExists = extendedFileRepo.existsByPath(parentPath);
+
+        if (!parentExists) {
+            throw new FolderNotFoundException(parentPath);
+        }
+
+        boolean targetExists = extendedFileRepo.existsByPath(virtualPath);
+
+        if (targetExists) {
+            throw new FileAlreadyExistsException(virtualPath);
+        }
+
+        if (!file.exists()) {
+            throw new SourceFileNotFoundException(file.getAbsolutePath());
+        }
+
         if (parentPath.isEmpty()) {
             parentPath = Constant.PATH_SEP;
         }
 
-        if (isFileExists(parentPath, fileName)) {
-            throw new FileAlreadyExistsException(virtualPath);
-        }
-
         long fileSz = file.length();
 
-        int requiredBlks = (int) (fileSz % BLOCKSIZE == 0 ? (fileSz / BLOCKSIZE) : (fileSz / BLOCKSIZE) + 1);
+        int requiredBlockCnt = (int) (fileSz % BLOCKSIZE == 0 ? (fileSz / BLOCKSIZE) : (fileSz / BLOCKSIZE) + 1);
 
         ExtendedFileEntry parentEntry = extendedFileRepo.findFileEntryByPath(parentPath);
-
-//        FileEntry parentEntry = fileService.getByPath(parentPath);
 
         FileEntry fileEntry = new FileEntry();
         fileEntry.setCparent(parentEntry.getCid());
@@ -165,44 +205,37 @@ public class StorageManager {
         fileEntry.setCcrtdt(new Date());
         fileEntry = fileRepo.save(fileEntry);
 
-//        fileEntry = fileService.getByParentAndName(parentEntry.getCid(), fileName);
-
         File tmpDir = new File(appConfig.APP_TEMP_DIR);
 
-        java.io.File blockFile = java.io.File.createTempFile("jsocs-", ".tmp", tmpDir);    //this temp file will be reused
+        java.io.File blockFile = null;
 
-//        InputStream is = new FileInputStream(file);
+        try {
+            blockFile = java.io.File.createTempFile("jsocs-", ".tmp", tmpDir);  //this temp file will be reused
+        } finally {
 
-//        if (fileSz < (requiredBlks * BLOCKSIZE)) {
-//            is = new SequenceInputStream(is, new DummyInputStream());
-//        }
-
-        IOException ioException = null;
-        RuntimeException runtimeException = null;
+        }
 
         try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(file))) {
 
-            for (int i = 0; i < requiredBlks; i++) {
+            for (int i = 0; i < requiredBlockCnt; i++) {
                 String id = UUID.randomUUID().toString();
 
-                Map.Entry<Integer, CloudStorage> entry = this.getAvailableStorage();
+                Map.Entry<Integer, CloudStorage> entry = this.getNextAvailableStorage();
 
                 if (entry == null) {
-                    throw new InsufficientSpaceAvailableException();
+                    throw new InsufficientSpaceException();
                 } else {
-
-                    boolean abort = false;
 
                     long bytesToCopy = BLOCKSIZE;
 
-                    if (i == requiredBlks - 1 && fileSz % BLOCKSIZE > 0) {
+                    if (i == requiredBlockCnt - 1 && fileSz % BLOCKSIZE > 0) {
                         bytesToCopy = fileSz % BLOCKSIZE;
                     }
 
                     try (BufferedOutputStream out = new BufferedOutputStream(new CipherOutputStream(new FileOutputStream(blockFile), getCipher(Cipher.ENCRYPT_MODE)))) {
                         IOUtils.copyLarge(in, out, 0, bytesToCopy);
 
-                        if (i == requiredBlks - 1 && fileSz % BLOCKSIZE > 0) {
+                        if (i == requiredBlockCnt - 1 && fileSz % BLOCKSIZE > 0) {
                             for (int j = 0; j < BLOCKSIZE - bytesToCopy; j++) {
                                 out.write(0);
                             }
@@ -211,11 +244,9 @@ public class StorageManager {
                         out.flush();
 
                     } catch (IOException ex) {
-                        logger.error("error when copying file content to temporary data block", ex);
-                        throw ex;
+                        throw new CannotWriteTempFileException(blockFile.getAbsolutePath());
                     } catch (NoSuchPaddingException | InvalidKeyException | NoSuchAlgorithmException | InvalidAlgorithmParameterException ex) {
-                        logger.error("encryption of output stream failed, please check the parameters", ex);
-                        throw ex;
+                        throw new InvalidCryptoParamException();
                     }
 
                     String xFileName = Constant.PATH_SEP + id;
@@ -223,8 +254,8 @@ public class StorageManager {
                     do {
                         CloudStorage remoteStorage = entry.getValue();
 
-                        try {
-                            remoteStorage.upload(xFileName, new BufferedInputStream(new FileInputStream(blockFile)), BLOCKSIZE, false);
+                        try (InputStream is = new BufferedInputStream(new FileInputStream(blockFile))) {
+                            remoteStorage.upload(xFileName, is, BLOCKSIZE, false);
 
                             Block newEntry = new Block();
                             newEntry.setCname(id);
@@ -244,94 +275,45 @@ public class StorageManager {
 
                             fileTableRepo.save(fileTable);
 
-//                            fileTableService.create(fileEntry.getCid(), newEntry.getCid());
-
                             break;
 
-                        } catch (InvalidChecksumException ex) {
-                            remoteStorage.delete(xFileName);
-                            logger.debug("mismatch between local & remote checksum, retrying...");
-                        } catch (IOException ex) {
-                            if (ex.getMessage().contains("incomplete output stream")) {  // i always receive this exception when uploading large files
-                                logger.error("error when uploading files to remote storage", ex);
-//                                overwrite = true;
-                                continue;
-                            } else {
-                                throw ex;
-                            }
-                        } catch (RuntimeException ex) {
-                            if (ex.getMessage().contains("ServiceCode Error")) {
-                                logger.error("error when uploading files to remote storage", ex);
-//                                overwrite = true;
-                                continue;
-                            } else {
-                                throw ex;
-                            }
+                        } catch (IOException | RuntimeException ex) {
+                            throw new FileUploadException();
                         }
 
                     } while (true);
                 }
             }
         } catch (IOException ex) {
-            ioException = ex;
-        } catch (RuntimeException ex) {
-            runtimeException = ex;
-        } catch (NoSuchPaddingException | InvalidKeyException | NoSuchAlgorithmException | InvalidAlgorithmParameterException ex) {
-
+            if (fileEntry != null) {
+                fileRepo.deleteById(fileEntry.getCid());
+            }
+            throw ex;
         } finally {
             blockFile.delete();
-        }
-
-        file.delete();
-
-        if (ioException != null || runtimeException != null) {
-            logger.debug("error occurred, deleting associated records from database");
-            fileRepo.deleteById(fileEntry.getCid());
-//            fileService.deleteById(fileEntry.getCid());
-            if (ioException != null) throw ioException;
-            if (runtimeException != null) throw runtimeException;
+            file.delete();
         }
     }
 
-    private boolean isFileExists(String parentPath, String fileName) {
-        boolean fileExists = true;
-
-        String newParentPath = (parentPath.endsWith(Constant.PATH_SEP) ? parentPath : parentPath + Constant.PATH_SEP);
-
-        ExtendedFileEntry entry = extendedFileRepo.findFileEntryByPath(newParentPath + fileName);
-
-        //check if the given path already exists
-//        try {
-//            FileEntry parent = fileService.getByPath(parentPath);
-//            fileService.getByParentAndName(parent.getCid(), fileName);
-//        } catch (Exception ex) {
-//            fileExists = false;
-//        }
-
-        return entry != null;
-    }
-
-    public void extract(String virtualPath, java.io.File out) throws IOException {
+    /**
+     * Extract & save file content to target file
+     *
+     * @param virtualPath
+     * @param out
+     * @throws IOException
+     * @throws InvalidCryptoParamException
+     */
+    public void extract(String virtualPath, java.io.File out) throws IOException, InvalidCryptoParamException {
 
         init();
 
-        String parentPath = FilenameUtils.getFullPathNoEndSeparator(virtualPath);
-        String fileName = FilenameUtils.getName(virtualPath);
+        boolean targetExists = extendedFileRepo.existsByPath(virtualPath);
 
-        if (!isFileExists(parentPath, fileName)) {
-            logger.debug("file not exists: " + virtualPath);
-            throw new FileNotFoundException();
+        if (!targetExists) {
+            throw new FileNotFoundException(virtualPath);
         }
 
         long fileSize = -1;
-
-//        FileEntry fileEntry = null;
-//
-//        try {
-//            FileEntry parent = fileService.getByPath(parentPath);
-//            fileEntry = fileService.getByParentAndName(parent.getCid(), fileName);
-//        } catch (Exception ex) {
-//        }
 
         ExtendedFileEntry fileEntry = extendedFileRepo.findFileEntryByPath(virtualPath);
 
@@ -341,25 +323,15 @@ public class StorageManager {
 
             List<Block> fileBlocks = blockRepo.findBlocksByFileId(fileEntry.getCid());
 
-//            List<Block> fileBlocks = blockService.getByFileId(fileEntry.getCid());
-
-            //provision input stream from occupied blocks and concatenate them together according to their order (defined by cid)
-//            InputStream in = null;
-//            InputStream prevInputStream = null;
-
             if (out.exists()) {
                 out.delete();
             }
 
-            File tmpDir = new File(appConfig.APP_TEMP_DIR);
-
             try (BufferedOutputStream outStream = new BufferedOutputStream(new FileOutputStream(out, true))) {
 
-//                File tmpFile = File.createTempFile("jsocs-", ".tmp", tmpDir);
+                int blockCnt = fileBlocks.size();
 
-                for (int i = 0; i < fileBlocks.size(); i++) {
-
-                    logger.debug("reading block-" + i);
+                for (int i = 0; i < blockCnt; i++) {
 
                     Block curBlock = fileBlocks.get(i);
 
@@ -373,88 +345,95 @@ public class StorageManager {
                         long byteCnt = (i == fileBlocks.size() - 1) ? fileSize % BLOCKSIZE : BLOCKSIZE;
                         IOUtils.copyLarge(in, outStream, 0, byteCnt);
                     } catch (NoSuchPaddingException | InvalidKeyException | NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
-                        logger.error("decryption of input stream failed, please check the parameters", e);
+                        throw new InvalidCryptoParamException();
                     } finally {
 
                     }
                 }
 
-            } catch (IOException e) {
-                logger.error(e.getMessage(), e);
+            } finally {
+
             }
         }
     }
 
+    /**
+     * Delete file or folder of given path
+     *
+     * @param virtualPath
+     * @throws IOException
+     */
     public void delete(String virtualPath) throws IOException {
 
         init();
 
-        String parentPath = FilenameUtils.getFullPathNoEndSeparator(virtualPath);
-        String fileName = FilenameUtils.getName(virtualPath);
+        boolean targetExists = extendedFileRepo.existsByPath(virtualPath);
 
-        if (!isFileExists(parentPath, fileName)) {
-            throw new FileNotFoundException();
+        if (!targetExists) {
+            throw new FileNotFoundException(virtualPath);
         }
 
         ExtendedFileEntry fileEntry = extendedFileRepo.findFileEntryByPath(virtualPath);
 
-//        FileEntry parent = fileService.getByPath(parentPath);
-//        FileEntry fileEntry = fileService.getByParentAndName(parent.getCid(), fileName);
+        if (fileEntry != null) {
 
-        int fileId = fileEntry.getCid();
-        fileRepo.deleteById(fileId);
-//        fileService.deleteById(fileId);
+            int fileId = fileEntry.getCid();
+            fileRepo.deleteById(fileId);
 
-        if (new Integer(0).equals(fileEntry.getCisdir())) {
-            List<FileTable> fileTables = fileTableRepo.findByCfileid(fileId);
-//            List<FileTable> fileTables = fileTableService.getByFileId(fileId);
+            if (new Integer(0).equals(fileEntry.getCisdir())) {
+                List<FileTable> fileTables = fileTableRepo.findByCfileid(fileId);
 
-            for (FileTable entry : fileTables) {
+                for (FileTable entry : fileTables) {
 
-                Optional<Block> oBlock = blockRepo.findById(entry.getId().getCblkid());
+                    Optional<Block> oBlock = blockRepo.findById(entry.getId().getCblkid());
 
-                if (oBlock.isPresent()) {
-                    Block block = oBlock.get();
+                    if (oBlock.isPresent()) {
+                        Block block = oBlock.get();
 
-                    synchronized (storageMap) {
-                        CloudStorage cloudStorage = storageMap.get(block.getCid());
-                        cloudStorage.delete(block.getCdirectlink());  //delete from cloud storage
+                        synchronized (storageMap) {
+                            CloudStorage cloudStorage = storageMap.get(block.getCaccid());
+                            cloudStorage.delete(block.getCdirectlink());  //delete from cloud storage
+                        }
+
+                        blockRepo.deleteById(block.getCid());
+
                     }
-
-                    blockRepo.deleteById(block.getCid());
-
                 }
 
-//                blockService.update(entry.getCblkid(), false);
+                fileTableRepo.deleteByCfileid(fileId);
             }
-
-            fileTableRepo.deleteByCfileid(fileId);
-
-//            fileTableService.deleteByFileId(fileId);
         }
     }
 
-    public void makeDir(String path, String dirName) {
+    /**
+     * Create a directory on given path
+     *
+     * @param path
+     * @param dirName
+     * @throws FolderNotFoundException
+     * @throws FileAlreadyExistsException
+     */
+    public void makeDir(String path, String dirName) throws FolderNotFoundException, FileAlreadyExistsException {
+        boolean parentExists = extendedFileRepo.existsByPath(path);
 
-        logger.debug("path = " + path);
-        logger.debug("dirName = " + dirName);
+        if (!parentExists) {
+            throw new FolderNotFoundException(path);
+        }
 
-//        FileEntry fileEntry = null;
+        boolean targetExists = extendedFileRepo.existsByPath(path + dirName);
 
-        try {
+        if (targetExists) {
+            throw new FolderAlreadyExistsException(path + dirName);
+        }
 
-            ExtendedFileEntry fileEntry = extendedFileRepo.findFileEntryByPath(path);
+        ExtendedFileEntry fileEntry = extendedFileRepo.findFileEntryByPath(path);
 
-//            fileEntry = fileService.getByPath(path);    //can throw file entry not found
-
+        if (fileEntry != null) {
             FileEntry newEntry = new FileEntry();
             newEntry.setCname(dirName);
             newEntry.setCisdir(1);
             newEntry.setCparent(fileEntry.getCid());
             fileRepo.save(newEntry);
-
-        } catch (Exception ex) {
-
         }
     }
 }
