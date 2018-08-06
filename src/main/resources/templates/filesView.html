@@ -5,6 +5,7 @@
     <div th:replace="fragments/bootstrapInclude :: css"></div>
     <div th:replace="fragments/common-css"></div>
     <div th:replace="fragments/datatablesInclude :: css"></div>
+    <div th:replace="fragments/videojsInclude :: css"></div>
 </head>
 <body>
 
@@ -26,6 +27,9 @@
             <button type="button" class="btn btn-info make-dir-btn">
                 <span>Create Folder</span>
             </button>
+            <!--<button type="button" class="btn btn-info show-video-btn">-->
+            <!--<span>Show Video Player</span>-->
+            <!--</button>-->
         </div>
         </p>
         <form enctype="multipart/form-data" id="upload-form" style="display:none">
@@ -50,6 +54,7 @@
 <div th:replace="fragments/datatablesInclude :: js"></div>
 <div th:replace="fragments/bootstrapDialogInclude :: js"></div>
 <div th:replace="fragments/common-js"></div>
+<div th:replace="fragments/videojsInclude :: js"></div>
 <script>
     $(function () {
         var table = $("#fileTable").DataTable({
@@ -118,18 +123,18 @@
 
             })
             .on('click', 'a.change-path', function () {
-                    var data = table.row($(this).parents('tr')).data();
-                    console.log(data);
-                    // table.ajax.url("/api/files/?path=" + data.cfullpath);
-                    table.ajax.url("/api/files" + (data.cfullpath));
-                    table.ajax.reload();
-                    var $curPath = $("#current-path");
-                    $curPath.empty();
-                    $curPath.append(data.cfullpath);
-                }).on('click', 'a.download-url', function () {
                 var data = table.row($(this).parents('tr')).data();
-                $("#dummy").empty().append("<iframe src='/files/download" + data.cpath + data.cname + "'></iframe>");
-            })
+                console.log(data);
+                // table.ajax.url("/api/files/?path=" + data.cfullpath);
+                table.ajax.url("/api/files" + (data.cfullpath));
+                table.ajax.reload();
+                var $curPath = $("#current-path");
+                $curPath.empty();
+                $curPath.append(data.cfullpath);
+            }).on('click', 'a.download-url', function () {
+            var data = table.row($(this).parents('tr')).data();
+            $("#dummy").empty().append("<iframe src='/files/download" + data.cpath + data.cname + "'></iframe>");
+        })
             .on('click', 'button.delete-btn', function () {
                 var data = table.row($(this).parents('tr')).data();
 
@@ -141,11 +146,11 @@
                             url: '/api/files' + (data.cfullpath),
                             type: 'DELETE',
                             success: function (response) {
-                                if (response == 'success') {
+                                if (response.status == '00') {
                                     BootstrapModalWrapperFactory.alert('File deleted!');
                                     table.ajax.reload();
                                 } else {
-                                    BootstrapModalWrapperFactory.alert('Failed to delete File!');
+                                    BootstrapModalWrapperFactory.alert(response.message);
                                 }
                             }
                         });
@@ -154,10 +159,10 @@
                     }
                 });
             }).on('click', '.download-btn', function () {
-                var data = table.row($(this).parents('tr')).data();
-                console.log(data);
-                $("#dummy").empty().append("<iframe src='/api/files" + data.cfullpath + "'></iframe>");
-            });
+            var data = table.row($(this).parents('tr')).data();
+            console.log(data);
+            $("#dummy").empty().append("<iframe src='/api/files" + data.cfullpath + "'></iframe>");
+        });
 
         $(".refresh-btn").click(function () {
             table.ajax.reload();
@@ -174,9 +179,9 @@
 
             if (file.size > 0) {
                 $("#upload-filename").text(file.name);
-                if (curPath=='/'){
+                if (curPath == '/') {
                     $("#upload-path").val(curPath + file.name);
-                }else{
+                } else {
                     $("#upload-path").val(curPath + '/' + file.name);
                 }
                 $("#upload-percent").text('0');
@@ -223,9 +228,14 @@
                         return myXhr;
                     },
 
-                    success: function () {
-                        BootstrapModalWrapperFactory.alert('File uploaded!');
-                        table.ajax.reload();
+                    success: function (resp) {
+                        if (resp.status == '00') {
+                            BootstrapModalWrapperFactory.alert('File uploaded!');
+                            table.ajax.reload();
+                        } else {
+                            BootstrapModalWrapperFactory.alert(resp.message);
+                        }
+                        $('#upload-file').clear();
                     },
 
                     error: function (e) {
@@ -277,12 +287,13 @@
                                 },
                                 function (data) {
                                     modalWrapper.hide();
-                                    if (data == 'success') {
+                                    console.log(data);
+                                    if (data.status == '00') {
                                         BootstrapModalWrapperFactory.alert('Folder created!');
                                         table.ajax.reload();
                                     } else {
-                                        BootstrapModalWrapperFactory.alert('Failed to create folder!');
-                                        console.log(e);
+                                        BootstrapModalWrapperFactory.alert(data.message);
+                                        // console.log(e);
                                     }
                                 }
                             );
@@ -290,6 +301,32 @@
                     }
                 ]
             });
+            m.show();
+        });
+
+        $(".show-video-btn").click(function () {
+            console.log($(window).width());
+            console.log($(window).height());
+            var w = $(window).width();
+            var h = $(window).height();
+            var m = BootstrapModalWrapperFactory.createModal({
+                message: "<video id=\"my-video\" class=\"video-js\" controls preload=\"auto\" width=\"" + w + " height=\"" + h + "\" poster=\"MY_VIDEO_POSTER.jpg\" data-setup='{}'>" +
+                "<source src=\"//vjs.zencdn.net/v/oceans.mp4\" type=\"video/mp4\">" +
+                "</video>",
+                closable: true,
+                title: "Video Player",
+                closeByBackdrop: false,
+                buttons: [
+                    {
+                        label: "Close",
+                        cssClass: "btn btn-primary",
+                        action: function (modalWrapper, button, buttonData, originalEvent) {
+                            return modalWrapper.hide();
+                        }
+                    }
+                ]
+            });
+            m.updateSize("modal-lg");
             m.show();
         });
 

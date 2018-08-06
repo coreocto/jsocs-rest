@@ -19,4 +19,7 @@ public class AppConfig {
 
     @Value("${app.pcloud.client.secret}")
     public String APP_PCLOUD_CLIENT_SECRET;
+
+    @Value("${app.webdriver.firefox}")
+    public String APP_WEBDRIVER_FIREFOX;
 }

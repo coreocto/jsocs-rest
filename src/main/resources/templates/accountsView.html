@@ -87,8 +87,10 @@
         var table = $("#accTable").DataTable({
             "ajax": {
                 url: "/api/accounts",
-                type: "GET"
-            },
+                type: "GET",
+                "dataType": "json"
+            }
+            ,
             "columns": [
                 {
                     "title": "Account Name",
@@ -141,11 +143,11 @@
                             url: '/api/accounts/' + (data.cid),
                             type: 'DELETE',
                             success: function (response) {
-                                if (response == 'success') {
+                                if (response.status='00'){
                                     BootstrapModalWrapperFactory.alert('Account deleted!');
                                     table.ajax.reload();
-                                } else {
-                                    BootstrapModalWrapperFactory.alert('Failed to delete account!');
+                                }else{
+                                    BootstrapModalWrapperFactory.alert(response.message);
                                 }
                             }
                         });
@@ -180,7 +182,7 @@
                     success: function (response) {
                         console.log(response);
                         console.log(response.status);
-                        if (response.status == 'success') {
+                        if (response.status == '00') {
                         //     BootstrapModalWrapperFactory.createModal({
                         //         message: '<iframe src="'+response.url+'"></iframe>',//<div class="text-center">Loading</div>',
                         //         closable: true,
@@ -206,7 +208,7 @@
                         //     }).show();
                             window.open(response.url);
                         } else {
-                            BootstrapModalWrapperFactory.alert('Failed to perform oauth sequence!');
+                            BootstrapModalWrapperFactory.alert(response.message);
                         }
                     }
                 });
@@ -238,7 +240,7 @@
             BootstrapModalWrapperFactory.createAjaxModal({
                 message: '<div class="text-center">Loading</div>',
                 closable: true,
-                title: "AJAX Content",
+                title: "Add Account",
                 closeByBackdrop: false,
                 url: '/accounts/add',
                 buttons: [
@@ -258,11 +260,11 @@
                                 type: $("#type").val()
                             }).done(function (data) {
                                 modalWrapper.hide();
-                                if (data == 'success') {
+                                if (data.status == '00') {
                                     BootstrapModalWrapperFactory.alert('Account added!');
                                     table.ajax.reload();
                                 }else{
-                                    BootstrapModalWrapperFactory.alert('Failed to add account!!');
+                                    BootstrapModalWrapperFactory.alert(data.message);
                                 }
                             });
                         }

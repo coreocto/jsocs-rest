@@ -29,6 +29,7 @@ import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class StorageManager {
@@ -82,7 +83,7 @@ public class StorageManager {
         for (Account account : accountRepo.findAll()) {
 
             CloudStorage cloudStorage = new PCloud(
-                    new CustomLocalReceiver(DEFAULT_CALLBACK_PORT),
+                    new CustomLocalReceiver(DEFAULT_CALLBACK_PORT, "<h1>Please close this window!</h1>", appConfig.APP_WEBDRIVER_FIREFOX),
                     appConfig.APP_PCLOUD_CLIENT_ID,
                     appConfig.APP_PCLOUD_CLIENT_SECRET,
                     "http://localhost:" + DEFAULT_CALLBACK_PORT + "/auth",
@@ -203,6 +204,7 @@ public class StorageManager {
         fileEntry.setCname(fileName);
         fileEntry.setCsize(fileSz);
         fileEntry.setCcrtdt(new Date());
+        fileEntry.setClastlock(new Date());
         fileEntry = fileRepo.save(fileEntry);
 
         File tmpDir = new File(appConfig.APP_TEMP_DIR);
@@ -251,6 +253,9 @@ public class StorageManager {
 
                     String xFileName = Constant.PATH_SEP + id;
 
+                    fileEntry.setClastlock(new Date()); //maintain the lock on the file
+                    fileRepo.save(fileEntry);
+
                     do {
                         CloudStorage remoteStorage = entry.getValue();
 
@@ -284,6 +289,10 @@ public class StorageManager {
                     } while (true);
                 }
             }
+
+            fileEntry.setClastlock(null);
+            fileRepo.save(fileEntry);
+
         } catch (IOException ex) {
             if (fileEntry != null) {
                 fileRepo.deleteById(fileEntry.getCid());
@@ -318,6 +327,15 @@ public class StorageManager {
         ExtendedFileEntry fileEntry = extendedFileRepo.findFileEntryByPath(virtualPath);
 
         if (fileEntry != null) {
+
+            if (fileEntry.getClastlock() != null) {
+                Date curTime = new Date();
+                long diff = curTime.getTime() - fileEntry.getClastlock().getTime();
+                long minutes = TimeUnit.MILLISECONDS.toMinutes(diff);
+                if (minutes <= 5) {
+                    throw new FileLockedExeption();
+                }
+            }
 
             fileSize = fileEntry.getCsize();
 
@@ -376,6 +394,15 @@ public class StorageManager {
         ExtendedFileEntry fileEntry = extendedFileRepo.findFileEntryByPath(virtualPath);
 
         if (fileEntry != null) {
+
+            if (fileEntry.getClastlock() != null) {
+                Date curTime = new Date();
+                long diff = curTime.getTime() - fileEntry.getClastlock().getTime();
+                long minutes = TimeUnit.MILLISECONDS.toMinutes(diff);
+                if (minutes <= 5) {
+                    throw new FileLockedExeption();
+                }
+            }
 
             int fileId = fileEntry.getCid();
             fileRepo.deleteById(fileId);

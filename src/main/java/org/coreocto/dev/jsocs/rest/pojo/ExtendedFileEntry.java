@@ -18,6 +18,15 @@ public class ExtendedFileEntry {
     private Long csize;
     private Integer cisdir;
     private Integer cparent;
+    private Date clastlock;
+
+    public Date getClastlock() {
+        return clastlock;
+    }
+
+    public void setClastlock(Date clastlock) {
+        this.clastlock = clastlock;
+    }
 
     public String getCfullpath() {
         return cfullpath;

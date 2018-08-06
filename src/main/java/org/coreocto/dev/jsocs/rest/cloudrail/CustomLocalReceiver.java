@@ -17,6 +17,7 @@ public class CustomLocalReceiver implements RedirectReceiver {
 
     private int port;
     private String answer;
+    private String webDriverExe;
 
     public CustomLocalReceiver(int port) {
         this(port, "<h1>Please close this window!</h1>");
@@ -25,6 +26,12 @@ public class CustomLocalReceiver implements RedirectReceiver {
     public CustomLocalReceiver(int port, String answer) {
         this.port = port;
         this.answer = answer;
+    }
+
+    public CustomLocalReceiver(int port, String answer, String webDriverExe) {
+        this.port = port;
+        this.answer = answer;
+        this.webDriverExe = webDriverExe;
     }
 
     public String openAndAwait(String url, String currentState) {
@@ -52,6 +59,7 @@ public class CustomLocalReceiver implements RedirectReceiver {
             // basically this class is same as the LocalReceiver class from cloudrail sdk
             // the difference is this class use selenium for authentication
             // because the java.awt.Desktop is not compatible with Spring Boot applications
+            System.setProperty("webdriver.gecko.driver", webDriverExe);
             WebDriver webDriver = new FirefoxDriver();
             webDriver.get(url);
 

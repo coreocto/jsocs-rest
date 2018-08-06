@@ -1,20 +1,22 @@
 package org.coreocto.dev.jsocs.rest.ctrl;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import org.apache.commons.io.FilenameUtils;
 import org.coreocto.dev.jsocs.rest.Constant;
 import org.coreocto.dev.jsocs.rest.config.AppConfig;
 import org.coreocto.dev.jsocs.rest.exception.FolderNotFoundException;
-import org.coreocto.dev.jsocs.rest.exception.InvalidCryptoParamException;
 import org.coreocto.dev.jsocs.rest.nio.StorageManager;
 import org.coreocto.dev.jsocs.rest.pojo.Account;
 import org.coreocto.dev.jsocs.rest.pojo.ExtendedFileEntry;
 import org.coreocto.dev.jsocs.rest.repo.AccountRepo;
 import org.coreocto.dev.jsocs.rest.repo.ExtendedFileRepo;
 import org.coreocto.dev.jsocs.rest.repo.FileRepo;
+import org.coreocto.dev.jsocs.rest.resp.JsonResponseFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.HandlerMapping;
@@ -22,7 +24,6 @@ import org.springframework.web.servlet.HandlerMapping;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.*;
-import java.nio.file.FileAlreadyExistsException;
 import java.util.List;
 import java.util.Optional;
 
@@ -40,6 +41,8 @@ public class AjaxController {
     AccountRepo accountRepo;
     @Autowired
     AppConfig appConfig;
+    @Autowired
+    JsonResponseFactory jsonResponseFactory;
 
     //accounts
     private boolean isAccountExists(String username, String type) {
@@ -51,43 +54,55 @@ public class AjaxController {
         return account != null;
     }
 
-    @PostMapping("/api/accounts")
+    @PostMapping(value = "/api/accounts", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
     public String createAccount(@RequestParam("username") String username, @RequestParam("type") String type) {
 
         boolean found = isAccountExists(username, type);
+
+        JsonObject resp = null;
 
         if (!found) {
             Account newAcc = new Account();
             newAcc.setCusername(username);
             newAcc.setCtype(type);
-            accountRepo.save(newAcc);
-            return "success";
-        } else {
-            return "failed";
+            try {
+                accountRepo.save(newAcc);
+            } catch (Exception ex) {
+                logger.error("error when creating account: " + new Gson().toJson(newAcc), ex);
+                resp = jsonResponseFactory.getError(ex);
+            }
         }
+
+        if (resp == null) {
+            resp = jsonResponseFactory.getSuccess();
+        }
+
+        return resp.toString();
     }
 
-    @GetMapping("/api/accounts")
+    @GetMapping(value = "/api/accounts", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
     public String listAccounts() {
         List<Account> accountList = accountRepo.findAll();
-        return "{ \"data\":" + new Gson().toJson(accountList) + " }";
+        return "{\"data\":" + new Gson().toJson(accountList) + "}";
     }
 
-    @DeleteMapping("/api/accounts/{userId}")
+    @DeleteMapping(value = "/api/accounts/{userId}", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
     public String deleteAccount(@PathVariable("userId") int userId) {
 
-        boolean success = true;
+        JsonObject resp = null;
+
         try {
             accountRepo.deleteById(userId);
         } catch (Exception ex) {
-            success = false;
+            logger.error("error when deleting account with id: " + userId, ex);
+            resp = jsonResponseFactory.getError(ex);
         }
 
-        if (success) {
-            return "success";
-        } else {
-            return "failed";
+        if (resp == null) {
+            resp = jsonResponseFactory.getSuccess();
         }
+
+        return resp.toString();
     }
     //end of accounts
 
@@ -106,10 +121,10 @@ public class AjaxController {
         return newPath;
     }
 
-    @PostMapping("/api/files")
+    @PostMapping(value = "/api/files", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
     public String save(@RequestParam("path") String path, @RequestParam("folder") Optional<String> folder, @RequestParam("file") Optional<MultipartFile> file) {
 
-        boolean success = true;
+        JsonObject resp = null;
 
         try {
             if (file.isPresent()) {
@@ -118,33 +133,23 @@ public class AjaxController {
                 File targetFile = new File(tmpDir, file.get().getOriginalFilename());
                 file.get().transferTo(targetFile);
 
-                if (success) {
-                    storageMgr.save(path, targetFile);
-                }
+                storageMgr.save(path, targetFile);
+
             } else if (folder.isPresent()) {
                 storageMgr.makeDir(path, folder.get());
             }
-        } catch (FolderNotFoundException e) {
-            e.printStackTrace();
-        } catch (FileAlreadyExistsException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            logger.error("error when uploading file to remote storage", e);
-            success = false;
-        } catch (InvalidCryptoParamException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            logger.error("error when save()", e);
+            resp = jsonResponseFactory.getError(e);
         } finally {
-
-        }
-
-        if (success) {
-            return "success";
-        } else {
-            return "failed";
+            if (resp == null) {
+                resp = jsonResponseFactory.getSuccess();
+            }
+            return resp.toString();
         }
     }
 
-    @GetMapping("/api/files")
+    @GetMapping(value = "/api/files", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
     public String listFiles() {
         List<ExtendedFileEntry> entries = null;
         try {
@@ -158,8 +163,7 @@ public class AjaxController {
     @GetMapping("/api/files/**")
     public void listFiles(HttpServletRequest request, HttpServletResponse response) {
 
-        String path = (String) request.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
-        path = path.substring("/api/files/".length() - 1);
+        String path = extractFilePath(request);
 
         String newPath = pathMassage(path);
 
@@ -217,39 +221,41 @@ public class AjaxController {
                 }
             }
 
-        } catch (IOException ex) {
-
-        } catch (InvalidCryptoParamException e) {
-            e.printStackTrace();
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
     }
 
-    @DeleteMapping("/api/files/**")
-    public String deleteFile(HttpServletRequest request) {
-
+    private String extractFilePath(HttpServletRequest request) {
         String path = (String)
                 request.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
-        path = path.substring("/api/files/".length() - 1);
-
-        boolean success = true;
-
-        String newPath = path;
-
-        if (!newPath.startsWith(Constant.PATH_SEP)) {
-            newPath = Constant.PATH_SEP + newPath;
+        if (path == null) {
+            return null;
+        } else {
+            return path.substring("/api/files/".length() - 1);
         }
+    }
+
+    @DeleteMapping(value = "/api/files/**", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
+    public String deleteFile(HttpServletRequest request) {
+
+        String path = extractFilePath(request);
+        String newPath = pathMassage(path);
+
+        JsonObject resp = null;
 
         try {
             storageMgr.delete(newPath);
         } catch (IOException ex) {
-            success = false;
+            logger.error("error when deleting file at path: " + newPath, ex);
+            resp = jsonResponseFactory.getError(ex);
         }
 
-        if (success) {
-            return "success";
-        } else {
-            return "failed";
+        if (resp == null) {
+            resp = jsonResponseFactory.getSuccess();
         }
+
+        return resp.toString();
     }
     // end of files
 }
