@@ -24,6 +24,7 @@ import org.springframework.web.servlet.HandlerMapping;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 
@@ -83,7 +84,15 @@ public class AjaxController {
     @GetMapping(value = "/api/accounts", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
     public String listAccounts() {
         List<Account> accountList = accountRepo.findAll();
-        return "{\"data\":" + new Gson().toJson(accountList) + "}";
+        byte[] bytes = new Gson().toJson(accountList).getBytes();
+        String s = "\"\"";
+        try {
+            s = new String(bytes, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+
+        return "{\"data\":" + s + "}";
     }
 
     @DeleteMapping(value = "/api/accounts/{userId}", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
@@ -130,7 +139,9 @@ public class AjaxController {
             if (file.isPresent()) {
                 File tmpDir = new File(appConfig.APP_TEMP_DIR);
 
-                File targetFile = new File(tmpDir, file.get().getOriginalFilename());
+                String tmpStr = file.get().getOriginalFilename();
+
+                File targetFile = new File(tmpDir, tmpStr);
                 file.get().transferTo(targetFile);
 
                 storageMgr.save(path, targetFile);
@@ -152,12 +163,15 @@ public class AjaxController {
     @GetMapping(value = "/api/files", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
     public String listFiles() {
         List<ExtendedFileEntry> entries = null;
+        String s = "\"\"";
         try {
             entries = storageMgr.list(Constant.PATH_SEP);
+            s = new Gson().toJson(entries);
         } catch (FolderNotFoundException e) {
             e.printStackTrace();
         }
-        return "{ \"data\":" + new Gson().toJson(entries) + " }";
+
+        return "{ \"data\":" + s + " }";
     }
 
     @GetMapping("/api/files/**")
