@@ -8,6 +8,7 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
 import org.coreocto.dev.jsocs.rest.Constant;
 import org.coreocto.dev.jsocs.rest.cloudrail.CustomLocalReceiver;
+import org.coreocto.dev.jsocs.rest.cloudrail.OneDriveForBusiness;
 import org.coreocto.dev.jsocs.rest.config.AppConfig;
 import org.coreocto.dev.jsocs.rest.exception.*;
 import org.coreocto.dev.jsocs.rest.pojo.*;
@@ -56,7 +57,7 @@ public class StorageManager {
     @Autowired
     FileTableRepo fileTableRepo;
 
-    private Map<Integer, CloudStorage> storageMap = new HashMap<Integer, CloudStorage>();
+    private Map<Integer, CloudStorage> storageMap = new HashMap<>();
     private Boolean init = false;
 
     public Cipher getCipher(int mode) throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException {
@@ -82,13 +83,36 @@ public class StorageManager {
 
         for (Account account : accountRepo.findAll()) {
 
-            CloudStorage cloudStorage = new PCloud(
-                    new CustomLocalReceiver(DEFAULT_CALLBACK_PORT, "<h1>Please close this window!</h1>", appConfig.APP_WEBDRIVER_FIREFOX),
-                    appConfig.APP_PCLOUD_CLIENT_ID,
-                    appConfig.APP_PCLOUD_CLIENT_SECRET,
-                    "http://localhost:" + DEFAULT_CALLBACK_PORT + "/auth",
-                    ""
-            );
+            CloudStorage cloudStorage = null;
+
+            if (account.getCactive()==null || account.getCactive().equals(0)){
+                continue;
+            }
+
+            if (account.getCtype()!=null && account.getCtype().equalsIgnoreCase("pcloud")) {
+
+                cloudStorage = new PCloud(
+                        new CustomLocalReceiver(DEFAULT_CALLBACK_PORT, "<h1>Please close this window!</h1>", appConfig.APP_WEBDRIVER_FIREFOX),
+                        appConfig.APP_PCLOUD_CLIENT_ID,
+                        appConfig.APP_PCLOUD_CLIENT_SECRET,
+                        "http://localhost:" + DEFAULT_CALLBACK_PORT + "/auth",
+                        ""
+                );
+            }else if (account.getCtype()!=null && account.getCtype().equalsIgnoreCase("onedrive for business")){
+                cloudStorage = new OneDriveForBusiness(
+                        new CustomLocalReceiver(DEFAULT_CALLBACK_PORT, "<h1>Please close this window!</h1>", appConfig.APP_WEBDRIVER_FIREFOX),
+                        appConfig.APP_ONEDRIVE_FOR_BUSINESS_CLIENT_ID,
+                        appConfig.APP_ONEDRIVE_FOR_BUSINESS_CLIENT_SECRET,
+                        "http://localhost:" + DEFAULT_CALLBACK_PORT + "/auth",
+                        "");
+            }else if (account.getCtype()!=null && account.getCtype().equalsIgnoreCase("onedrive")){
+//                cloudStorage = new OneDrive(
+//                        new CustomLocalReceiver(DEFAULT_CALLBACK_PORT, "<h1>Please close this window!</h1>", appConfig.APP_WEBDRIVER_FIREFOX),
+//                        appConfig.APP_ONEDRIVE_FOR_BUSINESS_CLIENT_ID,
+//                        "fgpZARO538?:npgtCJP02^?",
+//                        "http://localhost:" + DEFAULT_CALLBACK_PORT + "/auth",
+//                        "");
+            }
 
             boolean saveCred = false;
 
@@ -105,10 +129,12 @@ public class StorageManager {
 
             cloudStorage.login();
 
-            if (saveCred) {
-                String crToken = cloudStorage.saveAsString();
-                account.setCcrtoken(crToken);
-                accountRepo.save(account);
+            if (!(cloudStorage instanceof OneDriveForBusiness)){
+                if (saveCred) {
+                    String crToken = cloudStorage.saveAsString();
+                    account.setCcrtoken(crToken);
+                    accountRepo.save(account);
+                }
             }
 
             synchronized (storageMap) {
@@ -122,11 +148,16 @@ public class StorageManager {
 
         synchronized (storageMap) {
             for (Map.Entry<Integer, CloudStorage> entry : storageMap.entrySet()) {
-                SpaceAllocation spaceAllocation = entry.getValue().getAllocation();
-                long availableSpace = spaceAllocation.getTotal() - spaceAllocation.getUsed();
-                if (availableSpace >= BLOCKSIZE) {
+                if (entry.getValue() instanceof OneDriveForBusiness){   //workaround for ODfB
                     result = entry;
                     break;
+                }else {
+                    SpaceAllocation spaceAllocation = entry.getValue().getAllocation();
+                    long availableSpace = spaceAllocation.getTotal() - spaceAllocation.getUsed();
+                    if (availableSpace >= BLOCKSIZE) {
+                        result = entry;
+                        break;
+                    }
                 }
             }
         }

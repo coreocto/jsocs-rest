@@ -10,6 +10,13 @@ import org.springframework.web.multipart.commons.CommonsMultipartResolver;
 
 @Configuration
 public class AppConfig {
+
+    @Value("${app.onedrive_for_business.client.secret}")
+    public String APP_ONEDRIVE_FOR_BUSINESS_CLIENT_SECRET;
+
+    @Value("${app.onedrive_for_business.client.id}")
+    public String APP_ONEDRIVE_FOR_BUSINESS_CLIENT_ID;
+
     @Value("${app.encrypt-key}")
     public String APP_ENCRYPT_KEY;
 

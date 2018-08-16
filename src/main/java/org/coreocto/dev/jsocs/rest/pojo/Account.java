@@ -18,6 +18,16 @@ public class Account {
     private String ctype;
     private String ccrtoken;
 
+    public Integer getCactive() {
+        return cactive;
+    }
+
+    public void setCactive(Integer cactive) {
+        this.cactive = cactive;
+    }
+
+    private Integer cactive;
+
     public String getCcrtoken() {
         return ccrtoken;
     }

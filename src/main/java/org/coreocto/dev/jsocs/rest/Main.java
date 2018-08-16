@@ -2,8 +2,6 @@ package org.coreocto.dev.jsocs.rest;
 
 import com.cloudrail.si.CloudRail;
 import org.coreocto.dev.jsocs.rest.config.AppConfig;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
@@ -12,11 +10,8 @@ import org.springframework.context.ConfigurableApplicationContext;
 @SpringBootApplication
 public class Main extends SpringBootServletInitializer {
 
-    static Logger logger = LoggerFactory.getLogger(Main.class);
-
     public static void main(String[] args) {
-//        System.setProperty("webdriver.gecko.driver", "r:\\geckodriver.exe");
-//        CloudRail.setAppKey("5b552bba3ef31211abe85e8c");
+        CloudRail.setAppKey("5b552bba3ef31211abe85e8c");
 
         ConfigurableApplicationContext context = SpringApplication.run(Main.class, args);
         CloudRail.setAppKey(context.getBean(AppConfig.class).APP_CLOUDRAIL_KEY);
