@@ -11,8 +11,6 @@ import org.springframework.context.ConfigurableApplicationContext;
 public class Main extends SpringBootServletInitializer {
 
     public static void main(String[] args) {
-        CloudRail.setAppKey("5b552bba3ef31211abe85e8c");
-
         ConfigurableApplicationContext context = SpringApplication.run(Main.class, args);
         CloudRail.setAppKey(context.getBean(AppConfig.class).APP_CLOUDRAIL_KEY);
         // removed due to unable to persists entity beans, init() should not be invoked here (2018/07/30)
