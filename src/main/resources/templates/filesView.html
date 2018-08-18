@@ -33,7 +33,7 @@
         </div>
         </p>
         <form enctype="multipart/form-data" id="upload-form" style="display:none">
-            <input name="file" type="file" id="upload-file"/>
+            <input name="file" type="file" id="upload-file" multiple/>
             <input type="button" value="Upload" id="upload-btn"/>
             <input name="path" type="text" id="upload-path"/>
         </form>
@@ -44,13 +44,27 @@
             <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
         </div>
         </p>
+        <div class="card">
+            <div class="card-header" style="background-color:#17a2b8">
+                <span style="color:white">Upload Queue</span>
+            </div>
+            <ul class="list-group list-group-flush" id="upload-queue">
+                <!--<li class="list-group-item">Cras justo odio</li>-->
+                <!--<li class="list-group-item">Dapibus ac facilisis in</li>-->
+                <!--<li class="list-group-item">Vestibulum at eros</li>-->
+            </ul>
+            <div class="card-header">
+                Finish List
+            </div>
+            <ul class="list-group list-group-flush" id="finish-list">
+            </ul>
+        </div>
 
         <div id="dummy" style="display:none"></div>
     </div>
 </div>
 </body>
 <div th:replace="fragments/bootstrapInclude :: js"></div>
-<div th:replace="fragments/jqueryUploadInclude :: js"></div>
 <div th:replace="fragments/datatablesInclude :: js"></div>
 <div th:replace="fragments/bootstrapDialogInclude :: js"></div>
 <div th:replace="fragments/common-js"></div>
@@ -168,25 +182,31 @@
             table.ajax.reload();
         });
 
+        var $uploadFilename = $("#upload-filename");
+        var $uploadPath = $("#upload-path");
+        var $uploadPercent = $("#upload-percent");
+        var $uploadProgress = $(".progress-bar");
+        var $uploadQueue = $("#upload-queue");
+        var $uploadFile = $('#upload-file');
+        var $uploadFinishList = $("#finish-list");
+
         $(".upload-btn").click(function () {
-            $("#upload-file").click();
+            $uploadFile.click();
         });
 
-        $('#upload-file').on('change', function () {
-            var file = this.files[0];
-
-            var curPath = $("#current-path").text();
+        function doUpload(domRef, curPath, curIdx, maxIdx) {
+            var file = domRef.files[curIdx];
 
             if (file.size > 0) {
-                $("#upload-filename").text(file.name);
+                $uploadFilename.text(file.name);
                 if (curPath == '/') {
-                    $("#upload-path").val(curPath + file.name);
+                    $uploadPath.val(curPath + file.name);
                 } else {
-                    $("#upload-path").val(curPath + '/' + file.name);
+                    $uploadPath.val(curPath + '/' + file.name);
                 }
-                $("#upload-percent").text('0');
+                $uploadPercent.text('0');
 
-                $(".progress-bar")
+                $uploadProgress
                     .css('width', '0%')
                     .attr('aria-valuenow', 0);
 
@@ -215,13 +235,13 @@
                                     var percent = (e.loaded * 1.0 / e.total) * 100;
                                     percent = parseInt(percent, 10);
 
-                                    $(".progress-bar")
+                                    $uploadProgress
                                         .css('width', percent + '%')
                                         .attr('aria-valuenow', percent)
                                     // .attr('aria-valuemax',e.total)
                                     ;
 
-                                    $("#upload-percent").text(percent);
+                                    $uploadPercent.text(percent);
                                 }
                             }, false);
                         }
@@ -230,12 +250,26 @@
 
                     success: function (resp) {
                         if (resp.status == '00') {
-                            BootstrapModalWrapperFactory.alert('File uploaded!');
-                            table.ajax.reload();
+                            // BootstrapModalWrapperFactory.alert('File uploaded!');
+                            // table.ajax.reload();
+                            // uploadMsg += file.name + ' ... uploaded<br/>';
+                            $uploadQueue.children().eq(curIdx).text(file.name+' ['+file.size+'B] to '+curPath+' (Uploaded)');
                         } else {
-                            BootstrapModalWrapperFactory.alert(resp.message);
+                            // BootstrapModalWrapperFactory.alert(resp.message);
+                            // uploadMsg += file.name + ' ... failed<br/>';
+                            $uploadQueue.children().eq(curIdx).text(file.name+' ['+file.size+'B] to '+curPath+' (Failed)');
                         }
-                        $('#upload-file').clear();
+                        //$('#upload-file').clear();
+
+                        if (curIdx < maxIdx - 1) {
+                            doUpload(domRef, curPath, curIdx + 1, maxIdx);
+                        } else {
+                            BootstrapModalWrapperFactory.alert('Queue processed. Please check the "Finish List" for result.');
+                            table.ajax.reload();
+                            $uploadFile.empty();
+                            $uploadFinishList.append($uploadQueue.children());
+                            $uploadQueue.empty();
+                        }
                     },
 
                     error: function (e) {
@@ -243,7 +277,32 @@
                         console.log(e);
                     }
                 });
+            } else if (curIdx < maxIdx - 1) {
+                // uploadMsg += file.name + ' ... skipped<br/>';
+                doUpload(domRef, curPath, curIdx + 1, maxIdx);
+                $uploadQueue.children().eq(curIdx).text(file.name+' ['+file.size+'B] to '+curPath+' (Skipped)');
             }
+        }
+
+        // var uploadMsg = '';
+
+        $('#upload-file').on('change', function () {
+
+            var files = this.files;
+
+            var fileCnt = this.files.length;
+
+            var curPath = $("#current-path").text();
+
+            $uploadQueue.empty();
+
+            for (var i = 0; i<fileCnt; i++){
+                $uploadQueue.append('<li class="list-group-item">'+files[i].name+' ['+files[i].size+'B] to '+curPath+'</li>');
+            }
+
+            // uploadMsg = '';
+
+            doUpload(this, curPath, 0, fileCnt);
 
             // if (file.size > 1024) {
             //     alert('max upload size is 1k')
