@@ -33,10 +33,13 @@
         </div>
         </p>
         <form enctype="multipart/form-data" id="upload-form" style="display:none">
-            <input name="file" type="file" id="upload-file" multiple/>
+            <input name="file" type="file" id="upload-file"/>
             <input type="button" value="Upload" id="upload-btn"/>
             <input name="path" type="text" id="upload-path"/>
         </form>
+
+        <input name="file" type="file" style="display:none" id="multi-upload-file" multiple/>
+
         <p>
         <h3 class="page-information">Current Upload: <span id="upload-filename"></span>(<span
                 id="upload-percent"></span>%)</h3>
@@ -188,10 +191,11 @@
         var $uploadProgress = $(".progress-bar");
         var $uploadQueue = $("#upload-queue");
         var $uploadFile = $('#upload-file');
+        var $uploadFileMulti = $("#multi-upload-file");
         var $uploadFinishList = $("#finish-list");
 
         $(".upload-btn").click(function () {
-            $uploadFile.click();
+            $uploadFileMulti.click();
         });
 
         function doUpload(domRef, curPath, curIdx, maxIdx) {
@@ -210,13 +214,24 @@
                     .css('width', '0%')
                     .attr('aria-valuenow', 0);
 
+                // for security reasons, browser does not allows you to assign value to file control (except '')
+                // therefore the commented code below will give error when you try to do so
+                // $uploadFile.val(file);
+
+                // however, you can manipulate the real upload value using the FormData construct
+                // here I overwrite the original file value with a specific file
+                var tmpForm = new FormData($('#upload-form')[0]);
+                tmpForm.set('file',file,file.name);
+                // console.log($('#upload-form')[0]);
+                // console.log(new FormData($('#upload-form')[0]));
+
                 $.ajax({
                     // Your server script to process the upload
                     url: '/api/files',
                     type: 'POST',
 
                     // Form data
-                    data: new FormData($('#upload-form')[0]),
+                    data: tmpForm,
 
                     // Tell jQuery not to process data or worry about content-type
                     // You *must* include these options!
@@ -286,7 +301,7 @@
 
         // var uploadMsg = '';
 
-        $('#upload-file').on('change', function () {
+        $uploadFileMulti.on('change', function () {
 
             var files = this.files;
 
