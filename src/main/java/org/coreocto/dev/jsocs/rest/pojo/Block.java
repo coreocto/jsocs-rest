@@ -1,12 +1,15 @@
 package org.coreocto.dev.jsocs.rest.pojo;
 
 import javax.persistence.*;
+import java.util.Date;
 
 @Entity
 @Table(name = "tblock")
 public class Block {
+
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @SequenceGenerator(name="identifier", sequenceName="tblock_cid_seq", allocationSize=1)
+    @GeneratedValue(strategy=GenerationType.SEQUENCE, generator="identifier")
     private Integer cid;
     private String cname;
     private Integer cuse;
@@ -15,6 +18,15 @@ public class Block {
     private String cowner;
     private String cdirectlink;
     private Integer caccid;
+    private Date ccrtdt;
+
+    public Date getCcrtdt() {
+        return ccrtdt;
+    }
+
+    public void setCcrtdt(Date ccrtdt) {
+        this.ccrtdt = ccrtdt;
+    }
 
     public Integer getCaccid() {
         return caccid;

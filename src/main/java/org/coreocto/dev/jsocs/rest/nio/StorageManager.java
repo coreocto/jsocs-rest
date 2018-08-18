@@ -8,7 +8,7 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
 import org.coreocto.dev.jsocs.rest.Constant;
 import org.coreocto.dev.jsocs.rest.cloudrail.CustomLocalReceiver;
-import org.coreocto.dev.jsocs.rest.cloudrail.OneDriveForBusiness;
+import org.coreocto.dev.jsocs.rest.msgraph.OneDriveForBusiness;
 import org.coreocto.dev.jsocs.rest.config.AppConfig;
 import org.coreocto.dev.jsocs.rest.exception.*;
 import org.coreocto.dev.jsocs.rest.pojo.*;
@@ -16,6 +16,8 @@ import org.coreocto.dev.jsocs.rest.repo.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Cipher;
@@ -30,12 +32,12 @@ import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 @Service
 public class StorageManager {
 
-    public static final int BLOCKSIZE = 64 * 1024 * 1024;
+    private static final int BLOCKSIZE = 64 * 1024 * 1024;
     private static final int DEFAULT_CALLBACK_PORT = 8082;
     private final Logger logger = LoggerFactory.getLogger(StorageManager.class);
 
@@ -85,11 +87,11 @@ public class StorageManager {
 
             CloudStorage cloudStorage = null;
 
-            if (account.getCactive()==null || account.getCactive().equals(0)){
+            if (account.getCactive() == null || account.getCactive().equals(0)) {
                 continue;
             }
 
-            if (account.getCtype()!=null && account.getCtype().equalsIgnoreCase("pcloud")) {
+            if (account.getCtype() != null && account.getCtype().equalsIgnoreCase("pcloud")) {
 
                 cloudStorage = new PCloud(
                         new CustomLocalReceiver(DEFAULT_CALLBACK_PORT, "<h1>Please close this window!</h1>", appConfig.APP_WEBDRIVER_FIREFOX),
@@ -98,14 +100,14 @@ public class StorageManager {
                         "http://localhost:" + DEFAULT_CALLBACK_PORT + "/auth",
                         ""
                 );
-            }else if (account.getCtype()!=null && account.getCtype().equalsIgnoreCase("onedrive for business")){
+            } else if (account.getCtype() != null && account.getCtype().equalsIgnoreCase("onedrive for business")) {
                 cloudStorage = new OneDriveForBusiness(
-                        new CustomLocalReceiver(DEFAULT_CALLBACK_PORT, "<h1>Please close this window!</h1>", appConfig.APP_WEBDRIVER_FIREFOX),
+                        new CustomLocalReceiver(DEFAULT_CALLBACK_PORT, "<h1>Please close this window!</h1>", appConfig.APP_WEBDRIVER_FIREFOX, appConfig.APP_WEBDRIVER_FIREFOX_PROFILE),
                         appConfig.APP_ONEDRIVE_FOR_BUSINESS_CLIENT_ID,
                         appConfig.APP_ONEDRIVE_FOR_BUSINESS_CLIENT_SECRET,
                         "http://localhost:" + DEFAULT_CALLBACK_PORT + "/auth",
                         "");
-            }else if (account.getCtype()!=null && account.getCtype().equalsIgnoreCase("onedrive")){
+            } else if (account.getCtype() != null && account.getCtype().equalsIgnoreCase("onedrive")) {
 //                cloudStorage = new OneDrive(
 //                        new CustomLocalReceiver(DEFAULT_CALLBACK_PORT, "<h1>Please close this window!</h1>", appConfig.APP_WEBDRIVER_FIREFOX),
 //                        appConfig.APP_ONEDRIVE_FOR_BUSINESS_CLIENT_ID,
@@ -129,7 +131,7 @@ public class StorageManager {
 
             cloudStorage.login();
 
-            if (!(cloudStorage instanceof OneDriveForBusiness)){
+            if (!(cloudStorage instanceof OneDriveForBusiness)) {
                 if (saveCred) {
                     String crToken = cloudStorage.saveAsString();
                     account.setCcrtoken(crToken);
@@ -148,10 +150,10 @@ public class StorageManager {
 
         synchronized (storageMap) {
             for (Map.Entry<Integer, CloudStorage> entry : storageMap.entrySet()) {
-                if (entry.getValue() instanceof OneDriveForBusiness){   //workaround for ODfB
+                if (entry.getValue() instanceof OneDriveForBusiness) {   //workaround for ODfB
                     result = entry;
                     break;
-                }else {
+                } else {
                     SpaceAllocation spaceAllocation = entry.getValue().getAllocation();
                     long availableSpace = spaceAllocation.getTotal() - spaceAllocation.getUsed();
                     if (availableSpace >= BLOCKSIZE) {
@@ -234,91 +236,123 @@ public class StorageManager {
         fileEntry.setCisdir(0);
         fileEntry.setCname(fileName);
         fileEntry.setCsize(fileSz);
-        fileEntry.setCcrtdt(new Date());
-        fileEntry.setClastlock(new Date());
+        Date curTime = Calendar.getInstance().getTime();
+        fileEntry.setCcrtdt(curTime);
+        fileEntry.setClastlock(curTime);
         fileEntry = fileRepo.save(fileEntry);
 
         File tmpDir = new File(appConfig.APP_TEMP_DIR);
 
-        java.io.File blockFile = null;
+//        java.io.File blockFile = null;
 
-        try {
-            blockFile = java.io.File.createTempFile("jsocs-", ".tmp", tmpDir);  //this temp file will be reused
-        } finally {
+//        try {
+//            blockFile = java.io.File.createTempFile("jsocs-", ".tmp", tmpDir);  //this temp file will be reused
+//        } finally {
+//
+//        }
 
-        }
+        Map.Entry<Integer, CloudStorage> entry = this.getNextAvailableStorage();
+
+        ExecutorService executor = Executors.newFixedThreadPool(10);
+        List<Future<Block>> futureList = new ArrayList<>();
 
         try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(file))) {
 
             for (int i = 0; i < requiredBlockCnt; i++) {
                 String id = UUID.randomUUID().toString();
 
-                Map.Entry<Integer, CloudStorage> entry = this.getNextAvailableStorage();
+                //temporary disable space check
 
-                if (entry == null) {
-                    throw new InsufficientSpaceException();
-                } else {
+//                Map.Entry<Integer, CloudStorage> entry = this.getNextAvailableStorage();
+//
+//                if (entry == null) {
+//                    throw new InsufficientSpaceException();
+//                } else {
 
-                    long bytesToCopy = BLOCKSIZE;
+                long bytesToCopy = BLOCKSIZE;
+
+                if (i == requiredBlockCnt - 1 && fileSz % BLOCKSIZE > 0) {
+                    bytesToCopy = fileSz % BLOCKSIZE;
+                }
+
+                //ExecutorService executor = Executors.newFixedThreadPool(10);
+
+//                    try {
+                final java.io.File blockFile = java.io.File.createTempFile("jsocs-", ".tmp", tmpDir);
+//                    } finally {
+//
+//                    }
+
+                try (BufferedOutputStream out = new BufferedOutputStream(new CipherOutputStream(new FileOutputStream(blockFile), getCipher(Cipher.ENCRYPT_MODE)))) {
+                    IOUtils.copyLarge(in, out, 0, bytesToCopy);
 
                     if (i == requiredBlockCnt - 1 && fileSz % BLOCKSIZE > 0) {
-                        bytesToCopy = fileSz % BLOCKSIZE;
+                        for (int j = 0; j < BLOCKSIZE - bytesToCopy; j++) {
+                            out.write(0);
+                        }
                     }
 
-                    try (BufferedOutputStream out = new BufferedOutputStream(new CipherOutputStream(new FileOutputStream(blockFile), getCipher(Cipher.ENCRYPT_MODE)))) {
-                        IOUtils.copyLarge(in, out, 0, bytesToCopy);
+                    out.flush();
 
-                        if (i == requiredBlockCnt - 1 && fileSz % BLOCKSIZE > 0) {
-                            for (int j = 0; j < BLOCKSIZE - bytesToCopy; j++) {
-                                out.write(0);
+                } catch (IOException ex) {
+                    throw new CannotWriteTempFileException(blockFile.getAbsolutePath());
+                } catch (NoSuchPaddingException | InvalidKeyException | NoSuchAlgorithmException | InvalidAlgorithmParameterException ex) {
+                    throw new InvalidCryptoParamException();
+                }
+
+                String xFileName = Constant.PATH_SEP + id;
+
+                fileEntry.setClastlock(Calendar.getInstance().getTime()); //maintain the lock on the file
+                fileRepo.save(fileEntry);
+
+                futureList.add(executor.submit(
+                        new Callable<Block>() {
+                            @Override
+                            public Block call() throws Exception {
+
+                                Block newEntry = new Block();
+                                newEntry.setCname(id);
+                                newEntry.setCsize(BLOCKSIZE);
+                                newEntry.setCaccid(entry.getKey());
+                                newEntry.setCdirectlink(xFileName);
+                                newEntry.setCuse(1);
+                                newEntry.setCcrtdt(Calendar.getInstance().getTime());
+
+                                do {
+                                    CloudStorage remoteStorage = entry.getValue();
+
+                                    try (InputStream is = new BufferedInputStream(new FileInputStream(blockFile))) {
+                                        remoteStorage.upload(xFileName, is, BLOCKSIZE, false);
+                                        break;
+                                    } catch (IOException | RuntimeException ex) {
+                                        logger.debug("error when uploading file to remote storage", ex);
+//                                    throw new FileUploadException();
+                                    }
+
+                                } while (true);
+
+                                blockFile.delete();
+
+                                return newEntry;
                             }
                         }
+                ));
+            }
 
-                        out.flush();
+            for (Future<Block> f : futureList) {
+                Block blockEntry = f.get();
 
-                    } catch (IOException ex) {
-                        throw new CannotWriteTempFileException(blockFile.getAbsolutePath());
-                    } catch (NoSuchPaddingException | InvalidKeyException | NoSuchAlgorithmException | InvalidAlgorithmParameterException ex) {
-                        throw new InvalidCryptoParamException();
-                    }
+                blockRepo.save(blockEntry);
 
-                    String xFileName = Constant.PATH_SEP + id;
+                FileTableId fileTableId = new FileTableId();
+                fileTableId.setCfileid(fileEntry.getCid());
+                fileTableId.setCblkid(blockEntry.getCid());
 
-                    fileEntry.setClastlock(new Date()); //maintain the lock on the file
-                    fileRepo.save(fileEntry);
+                FileTable fileTable = new FileTable();
+                fileTable.setId(fileTableId);
+                fileTable.setCcrtdt(Calendar.getInstance().getTime());
 
-                    do {
-                        CloudStorage remoteStorage = entry.getValue();
-
-                        try (InputStream is = new BufferedInputStream(new FileInputStream(blockFile))) {
-                            remoteStorage.upload(xFileName, is, BLOCKSIZE, false);
-
-                            Block newEntry = new Block();
-                            newEntry.setCname(id);
-                            newEntry.setCsize(BLOCKSIZE);
-                            newEntry.setCaccid(entry.getKey());
-                            newEntry.setCdirectlink(xFileName);
-                            newEntry.setCuse(1);
-
-                            newEntry = blockRepo.save(newEntry);
-
-                            FileTableId fileTableId = new FileTableId();
-                            fileTableId.setCfileid(fileEntry.getCid());
-                            fileTableId.setCblkid(newEntry.getCid());
-
-                            FileTable fileTable = new FileTable();
-                            fileTable.setId(fileTableId);
-
-                            fileTableRepo.save(fileTable);
-
-                            break;
-
-                        } catch (IOException | RuntimeException ex) {
-                            throw new FileUploadException();
-                        }
-
-                    } while (true);
-                }
+                fileTableRepo.save(fileTable);
             }
 
             fileEntry.setClastlock(null);
@@ -329,9 +363,27 @@ public class StorageManager {
                 fileRepo.deleteById(fileEntry.getCid());
             }
             throw ex;
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+//        catch (FileUploadException e) {
+//            e.printStackTrace();
+//        }
+        catch (ExecutionException e) {
+            e.printStackTrace();
         } finally {
-            blockFile.delete();
             file.delete();
+        }
+    }
+
+    private void checkFileLock(ExtendedFileEntry fileEntry) throws FileLockedExeption {
+        if (fileEntry.getClastlock() != null) {
+            Date curTime = new Date();
+            long diff = curTime.getTime() - fileEntry.getClastlock().getTime();
+            long minutes = TimeUnit.MILLISECONDS.toMinutes(diff);
+            if (minutes <= 5) {
+                throw new FileLockedExeption();
+            }
         }
     }
 
@@ -359,14 +411,7 @@ public class StorageManager {
 
         if (fileEntry != null) {
 
-            if (fileEntry.getClastlock() != null) {
-                Date curTime = new Date();
-                long diff = curTime.getTime() - fileEntry.getClastlock().getTime();
-                long minutes = TimeUnit.MILLISECONDS.toMinutes(diff);
-                if (minutes <= 5) {
-                    throw new FileLockedExeption();
-                }
-            }
+            checkFileLock(fileEntry);
 
             fileSize = fileEntry.getCsize();
 
@@ -426,14 +471,7 @@ public class StorageManager {
 
         if (fileEntry != null) {
 
-            if (fileEntry.getClastlock() != null) {
-                Date curTime = new Date();
-                long diff = curTime.getTime() - fileEntry.getClastlock().getTime();
-                long minutes = TimeUnit.MILLISECONDS.toMinutes(diff);
-                if (minutes <= 5) {
-                    throw new FileLockedExeption();
-                }
-            }
+            checkFileLock(fileEntry);
 
             int fileId = fileEntry.getCid();
             fileRepo.deleteById(fileId);
@@ -491,6 +529,7 @@ public class StorageManager {
             newEntry.setCname(dirName);
             newEntry.setCisdir(1);
             newEntry.setCparent(fileEntry.getCid());
+            newEntry.setCcrtdt(Calendar.getInstance().getTime());
             fileRepo.save(newEntry);
         }
     }

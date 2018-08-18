@@ -6,8 +6,10 @@ import java.util.Date;
 @Entity
 @Table(name = "tfiles")
 public class FileEntry {
+
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @SequenceGenerator(name="identifier", sequenceName="tfiles_cid_seq", allocationSize=1)
+    @GeneratedValue(strategy=GenerationType.SEQUENCE, generator="identifier")
     private Integer cid;
     private String cname;
     private Date ccrtdt;

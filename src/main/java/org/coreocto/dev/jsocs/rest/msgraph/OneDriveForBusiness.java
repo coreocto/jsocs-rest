@@ -1,4 +1,4 @@
-package org.coreocto.dev.jsocs.rest.cloudrail;
+package org.coreocto.dev.jsocs.rest.msgraph;
 
 import com.cloudrail.si.exceptions.ParseException;
 import com.cloudrail.si.interfaces.CloudStorage;
@@ -9,10 +9,14 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import okhttp3.*;
 import org.coreocto.dev.jsocs.rest.okhttp3.RequestBodyUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.util.Calendar;
 import java.util.List;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * this is an temporary(?) solution to fix 'The app ID is blocked for access of the O365 Discovery Service' problem of accessing OneDrive for Business using CloudRail library
@@ -20,6 +24,8 @@ import java.util.List;
  * this class is not fully functional currently but good enough to serve my needs
  */
 public class OneDriveForBusiness implements CloudStorage {
+
+    private final Logger logger = LoggerFactory.getLogger(OneDriveForBusiness.class);
 
     private static final String bearer = "Bearer ";
     private static final String myDrive = "https://graph.microsoft.com/v1.0/me/drive";
@@ -32,7 +38,7 @@ public class OneDriveForBusiness implements CloudStorage {
     private String mRedirectUri;
     private String mState;
     private String mAuthorizationCode;
-    private long lastRefreshTime;
+    private AtomicLong lastRefreshTime;
 
     public OneDriveForBusiness(RedirectReceiver redirectReceiver, String clientId, String clientSecret, String redirectUri, String state) {
         this.mClientId = clientId;
@@ -44,6 +50,7 @@ public class OneDriveForBusiness implements CloudStorage {
 
     private OkHttpClient getHttpClient() {
         return okHttpClient;
+//        return new OkHttpClient();
     }
 
     private Request.Builder getRequestBuilder() {
@@ -56,6 +63,8 @@ public class OneDriveForBusiness implements CloudStorage {
 
     @Override
     public InputStream download(String s) {
+
+//        this.validateToken();
 
         String fileUrl = myDrive + "/root:" + s + ":/content";
 
@@ -86,6 +95,8 @@ public class OneDriveForBusiness implements CloudStorage {
     @Override
     public void upload(String s, InputStream inputStream, long l, boolean b) {
 
+//        this.validateToken();
+
         String newFileUrl = myDrive + "/root:" + s + ":/createUploadSession";
 
         Request request = getRequestBuilder()
@@ -107,7 +118,7 @@ public class OneDriveForBusiness implements CloudStorage {
             uploadUrl = jsonObject.get("uploadUrl").getAsString();
 
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.debug("unable to retrieve uploadUrl", e);
         }
 
         if (uploadUrl != null) {
@@ -145,7 +156,7 @@ public class OneDriveForBusiness implements CloudStorage {
 
     @Override
     public void delete(String s) {
-        throw new UnsupportedOperationException();
+//        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -217,9 +228,9 @@ public class OneDriveForBusiness implements CloudStorage {
         if (result==null){
             throw new NullPointerException("result == null");
         }
-        this.mAuthorizationCode = result.substring(result.indexOf("code=") + "code=".length(), result.indexOf("&session_state="));
+        mAuthorizationCode = result.substring(result.indexOf("code=") + "code=".length(), result.indexOf("&session_state="));
 
-        if (this.mAuthorizationCode != null) {
+        if (mAuthorizationCode != null) {
             RequestBody formBody = new FormBody.Builder()
                     .add("client_id", mClientId)
                     .add("client_secret", mClientSecret)
@@ -235,65 +246,125 @@ public class OneDriveForBusiness implements CloudStorage {
 
             String responseStr = null;
 
+            boolean safeToProceed = false;
+
             try (Response response = this.getHttpClient().newCall(request).execute()) {
                 if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
 
                 responseStr = response.body().string();
 
                 JsonObject jsonObject = new Gson().fromJson(responseStr, JsonObject.class);
-                mAccessToken = jsonObject.get("access_token").getAsString();
-                mRefreshToken = jsonObject.get("refresh_token").getAsString();  //this requires offline_access in scopes
+                synchronized (this) {
+                    mAccessToken = jsonObject.get("access_token").getAsString();
+                    mRefreshToken = jsonObject.get("refresh_token").getAsString();  //this requires offline_access in scopes
+                    lastRefreshTime = new AtomicLong(Calendar.getInstance().getTimeInMillis());
+                }
 
-                lastRefreshTime = Calendar.getInstance().getTimeInMillis();
+                safeToProceed = true;
 
             } catch (IOException e) {
                 throw new RuntimeException(e.getMessage());
             }
+
+            if (safeToProceed) {
+                renewTokenExecutor.scheduleAtFixedRate(new RenewThread(), 0, 3595, TimeUnit.SECONDS);
+            }
         }
     }
 
-    private void validateToken(){
+    ScheduledExecutorService renewTokenExecutor = Executors.newScheduledThreadPool(1);
+
+    class RenewThread implements Runnable{
+
+        @Override
+        public void run() {
+
+            logger.debug("run()");
+
+            synchronized (OneDriveForBusiness.this){
+                if (mRefreshToken != null) {
+                    RequestBody formBody = new FormBody.Builder()
+                            .add("client_id", mClientId)
+                            .add("client_secret", mClientSecret)
+                            .add("code", mAuthorizationCode)
+                            .add("redirect_uri", mRedirectUri)
+                            .add("refresh_token", mRefreshToken)
+                            .add("grant_type", "refresh_token")
+                            .build();
+
+                    Request request = getRequestBuilder()
+                            .url("https://login.microsoftonline.com/common/oauth2/v2.0/token")
+                            .post(formBody)
+                            .build();
+
+                    String responseStr = null;
+
+                    try (Response response = OneDriveForBusiness.this.getHttpClient().newCall(request).execute()) {
+                        if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
+
+                        responseStr = response.body().string();
+
+                        JsonObject jsonObject = new Gson().fromJson(responseStr, JsonObject.class);
+                        mAccessToken = jsonObject.get("access_token").getAsString();
+                        mRefreshToken = jsonObject.get("refresh_token").getAsString();
+                        lastRefreshTime = new AtomicLong(Calendar.getInstance().getTimeInMillis());
+
+                        logger.debug("token renewed");
+
+                    } catch (IOException e) {
+                        throw new RuntimeException(e.getMessage());
+                    }
+                } else {
+                    throw new NullPointerException("mRefreshToken == null");
+                }
+            }
+
+        }
+    }
+
+    private synchronized void validateToken(){
         long curTime = Calendar.getInstance().getTimeInMillis();
 
-        if (curTime - lastRefreshTime <= ((3600 - 3000) * 1000)){   //refresh the token if the remaining time is less than 50 minutes
+        if (curTime - lastRefreshTime.get() <= ((3600 - 3000) * 1000)){   //refresh the token if the remaining time is less than 50 minutes
             this.refreshToken();
         }
     }
 
     private void refreshToken() {
-        if (mRefreshToken != null) {
-            RequestBody formBody = new FormBody.Builder()
-                    .add("client_id", mClientId)
-                    .add("client_secret", mClientSecret)
-                    .add("code", mAuthorizationCode)
-                    .add("redirect_uri", mRedirectUri)
-                    .add("refresh_token", mRefreshToken)
-                    .add("grant_type", "refresh_token")
-                    .build();
+        synchronized (this) {
+            if (mRefreshToken != null) {
+                RequestBody formBody = new FormBody.Builder()
+                        .add("client_id", mClientId)
+                        .add("client_secret", mClientSecret)
+                        .add("code", mAuthorizationCode)
+                        .add("redirect_uri", mRedirectUri)
+                        .add("refresh_token", mRefreshToken)
+                        .add("grant_type", "refresh_token")
+                        .build();
 
-            Request request = getRequestBuilder()
-                    .url("https://login.microsoftonline.com/common/oauth2/v2.0/token")
-                    .post(formBody)
-                    .build();
+                Request request = getRequestBuilder()
+                        .url("https://login.microsoftonline.com/common/oauth2/v2.0/token")
+                        .post(formBody)
+                        .build();
 
-            String responseStr = null;
+                String responseStr = null;
 
-            try (Response response = this.getHttpClient().newCall(request).execute()) {
-                if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
+                try (Response response = this.getHttpClient().newCall(request).execute()) {
+                    if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
 
-                responseStr = response.body().string();
+                    responseStr = response.body().string();
 
-                JsonObject jsonObject = new Gson().fromJson(responseStr, JsonObject.class);
-                mAccessToken = jsonObject.get("access_token").getAsString();
-                mRefreshToken = jsonObject.get("refresh_token").getAsString();
+                    JsonObject jsonObject = new Gson().fromJson(responseStr, JsonObject.class);
+                    mAccessToken = jsonObject.get("access_token").getAsString();
+                    mRefreshToken = jsonObject.get("refresh_token").getAsString();
+                    lastRefreshTime = new AtomicLong(Calendar.getInstance().getTimeInMillis());
 
-                lastRefreshTime = Calendar.getInstance().getTimeInMillis();
-
-            } catch (IOException e) {
-                throw new RuntimeException(e.getMessage());
+                } catch (IOException e) {
+                    throw new RuntimeException(e.getMessage());
+                }
+            } else {
+                throw new NullPointerException("mRefreshToken == null");
             }
-        } else {
-            throw new NullPointerException("mRefreshToken == null");
         }
     }
 

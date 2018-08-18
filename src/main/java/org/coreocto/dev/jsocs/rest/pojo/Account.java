@@ -6,8 +6,10 @@ import java.util.Date;
 @Entity
 @Table(name = "taccounts")
 public class Account {
+
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @SequenceGenerator(name="identifier", sequenceName="taccounts_cid_seq", allocationSize=1)
+    @GeneratedValue(strategy=GenerationType.SEQUENCE, generator="identifier")
     private Integer cid;
     private Date ccrtdt;
     private String cusername;
