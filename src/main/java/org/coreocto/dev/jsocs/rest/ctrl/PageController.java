@@ -22,12 +22,16 @@ public class PageController {
     private Logger logger = LoggerFactory.getLogger(PageController.class);
 
     @Autowired
-    StorageManager storageMgr;
+    private StorageManager storageMgr;
 
     @RequestMapping("/")
     public String viewLogin() {
-        storageMgr.init();
-        return "login";
+        return "accountsView";
+    }
+
+    @RequestMapping("/video")
+    public String videoPlayer(Model model) {
+        return "videoPlayer";
     }
 
     @RequestMapping("/accounts")
@@ -63,9 +67,7 @@ public class PageController {
 
         logger.debug("findPath = " + findPath);
 
-//        List<FileEntry> fileList = fileService.getFiles(findPath);
         model.addAttribute("path", findPath);
-//        model.addAttribute("fileList", fileList);
 
         return "filesView";
     }

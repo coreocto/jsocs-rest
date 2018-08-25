@@ -3,10 +3,7 @@ package org.coreocto.dev.jsocs.rest.nio;
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
 
-import java.io.BufferedInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -17,6 +14,7 @@ import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
 
 /**
  * Utility class to send an input stream with Range header and ETag support.
@@ -31,8 +29,7 @@ public class MultipartFileSender {
 
     private static final String METHOD_HEAD = "HEAD";
     private static final String MULTIPART_BOUNDARY = "MULTIPART_BYTERANGES";
-    private static final String CONTENT_TYPE_MULTITYPE_WITH_BOUNDARY = "multipart/byteranges; boundary=" +
-            MULTIPART_BOUNDARY;
+    private static final String CONTENT_TYPE_MULTITYPE_WITH_BOUNDARY = "multipart/byteranges; boundary=" + MULTIPART_BOUNDARY;
     private static final String CONTENT_DISPOSITION_INLINE = "inline";
     private static final String CONTENT_DISPOSITION_ATTACHMENT = "attachment";
     private static final String IF_NONE_MATCH = "If-None-Match";
@@ -66,6 +63,7 @@ public class MultipartFileSender {
     private static final String CACHE_CONTROL_SETTING = "private,no-cache";
 
     private BufferedInputStream inputStream;
+    private BufferedOutputStream outputStream;
     private HttpServletRequest request;
     private HttpServletResponse response;
     private String contentType;
@@ -84,6 +82,21 @@ public class MultipartFileSender {
     public static MultipartFileSender fromInputStream(InputStream inputStream) {
         return new MultipartFileSender(inputStream);
     }
+
+    // begin: added to force writing to specific output stream
+    public MultipartFileSender withOutputStream(OutputStream outputStream){
+        this.outputStream = new BufferedOutputStream(outputStream);
+        return this;
+    }
+
+    private OutputStream getOutputStream() throws IOException {
+        if (this.outputStream==null){
+            return response.getOutputStream();
+        }else{
+            return this.outputStream;
+        }
+    }
+    // end: added to force writing to specific output stream
 
     public MultipartFileSender with(HttpServletRequest httpRequest) {
         request = httpRequest;
@@ -127,13 +140,14 @@ public class MultipartFileSender {
         return this;
     }
 
+    @Async
     public void serveResource() throws IOException {
 
         // Validate and process range -------------------------------------------------------------
 
         // Prepare some variables. The full Range represents the complete file.
         Range full = getFullRange();
-        List<Range> ranges = getRanges(full);
+        List<Range> ranges = getRanges(full, false);
 
         if (ranges == null) {
             //The supplied range values were invalid
@@ -176,7 +190,7 @@ public class MultipartFileSender {
         // Send requested file (part(s)) to client ------------------------------------------------
 
         // Prepare streams.
-        try (OutputStream output = response.getOutputStream()) {
+        try (OutputStream output = this.getOutputStream()) {
 
 
             if (hasNoRanges(full, ranges)) {
@@ -185,7 +199,7 @@ public class MultipartFileSender {
                 log.debug("Return full file");
                 response.setContentType(contentType);
                 response.setHeader(CONTENT_LENGTH, String.valueOf(length));
-                Range.copy(inputStream, output, length, 0, length, bufferSize);
+                Range.copy(inputStream, output, length, 0, length, bufferSize, 0);
 
             } else if (ranges.size() == 1) {
 
@@ -198,7 +212,7 @@ public class MultipartFileSender {
                 response.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT); // 206.
 
                 // Copy single part range.
-                Range.copy(inputStream, output, length, r.start, r.length, bufferSize);
+                Range.copy(inputStream, output, length, r.start, r.length, bufferSize, offset);
 
             } else {
 
@@ -220,7 +234,7 @@ public class MultipartFileSender {
                     //Mark position of inputstream so we can return to it later
                     inputStream.mark(0);
                     // Copy single part range of multi part range.
-                    Range.copy(inputStream, output, length, r.start, r.length, bufferSize);
+                    Range.copy(inputStream, output, length, r.start, r.length, bufferSize, 0);
                     inputStream.reset();
 
                     sos.println();
@@ -293,7 +307,7 @@ public class MultipartFileSender {
 
     public boolean isNoRangeRequest() throws IOException {
         Range full = getFullRange();
-        List<Range> ranges = getRanges(full);
+        List<Range> ranges = getRanges(full, false);
 
         if (hasNoRanges(full, ranges)) {
             return true;
@@ -306,12 +320,13 @@ public class MultipartFileSender {
         return ranges != null && (ranges.isEmpty() || ranges.get(0) == full);
     }
 
-    private Range getFullRange() {
+    public Range getFullRange() {
         return new Range(0, length - 1, length);
     }
 
 
-    private List<Range> getRanges(final Range fullRange) throws IOException {
+//    private
+    public List<Range> getRanges(final Range fullRange, boolean doNotModifyResponse) throws IOException {
         List<Range> ranges = new ArrayList<>();
 
         // Validate and process Range and If-Range headers.
@@ -366,9 +381,11 @@ public class MultipartFileSender {
                     // Check if Range is syntactically valid. If not, then return 416.
                     if (start > end) {
                         log.warn("Check if Range is syntactically valid. If not, then return 416.");
-                        response.setHeader(CONTENT_RANGE,
-                                String.format(BYTES_DINVALID_BYTE_RANGE_FORMAT, length)); // Required in 416.
-                        response.sendError(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE);
+                        if (!doNotModifyResponse) {
+                            response.setHeader(CONTENT_RANGE,
+                                    String.format(BYTES_DINVALID_BYTE_RANGE_FORMAT, length)); // Required in 416.
+                            response.sendError(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE);
+                        }
                         return null;
                     }
 
@@ -384,12 +401,18 @@ public class MultipartFileSender {
         return StringUtils.isBlank(disposition);
     }
 
+    public MultipartFileSender withOffset(long l) {
+        this.offset = l;
+        return this;
+    }
 
-    private static class Range {
-        long start;
-        long end;
-        long length;
-        long total;
+    private long offset;
+
+    public static class Range {
+        public long start;
+        public long end;
+        public long length;
+        public long total;
 
         /**
          * Construct a byte range.
@@ -426,7 +449,7 @@ public class MultipartFileSender {
         }
 
         private static void copy(InputStream input, OutputStream output, long inputSize, long start, long length,
-                                 int bufferSize) throws IOException {
+                                 int bufferSize, long offset) throws IOException {
             byte[] buffer = new byte[bufferSize];
             int read;
 

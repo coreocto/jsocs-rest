@@ -9,7 +9,8 @@ CREATE TABLE public.taccounts
     cauth_token text COLLATE pg_catalog."default",
     ctype text COLLATE pg_catalog."default",
     ccrtoken text COLLATE pg_catalog."default",
-    cauthtoken character varying(255) COLLATE pg_catalog."default"
+    cauthtoken character varying(255) COLLATE pg_catalog."default",
+    cactive integer
 )
 WITH (
     OIDS = FALSE

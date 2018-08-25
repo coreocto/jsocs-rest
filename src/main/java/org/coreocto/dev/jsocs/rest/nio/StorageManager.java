@@ -8,16 +8,15 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
 import org.coreocto.dev.jsocs.rest.Constant;
 import org.coreocto.dev.jsocs.rest.cloudrail.CustomLocalReceiver;
-import org.coreocto.dev.jsocs.rest.msgraph.OneDriveForBusiness;
 import org.coreocto.dev.jsocs.rest.config.AppConfig;
 import org.coreocto.dev.jsocs.rest.exception.*;
+import org.coreocto.dev.jsocs.rest.msgraph.OneDriveForBusiness;
 import org.coreocto.dev.jsocs.rest.pojo.*;
 import org.coreocto.dev.jsocs.rest.repo.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Cipher;
@@ -31,15 +30,21 @@ import java.nio.file.FileAlreadyExistsException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import org.apache.commons.codec.binary.Base64;
 
 @Service
 public class StorageManager {
 
-    private static final int BLOCKSIZE = 64 * 1024 * 1024;
+
     private static final int DEFAULT_CALLBACK_PORT = 8082;
     private final Logger logger = LoggerFactory.getLogger(StorageManager.class);
+    private final ReadWriteLock rwlock = new ReentrantReadWriteLock();
 
     @Autowired
     AppConfig appConfig;
@@ -59,12 +64,14 @@ public class StorageManager {
     @Autowired
     FileTableRepo fileTableRepo;
 
+    private Base64 base64 = new Base64();
+
     private Map<Integer, CloudStorage> storageMap = new HashMap<>();
     private Boolean init = false;
 
-    public Cipher getCipher(int mode) throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException {
+    public Cipher getCipher(int mode, byte[] ivBytes) throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException {
         byte[] iv_key = appConfig.APP_ENCRYPT_KEY.getBytes();
-        IvParameterSpec iv = new IvParameterSpec(iv_key);
+        IvParameterSpec iv = new IvParameterSpec(ivBytes);
         SecretKeySpec m_keySpec = new SecretKeySpec(iv_key, "AES");
         Cipher m_cipher = javax.crypto.Cipher.getInstance("AES/CTR/NoPadding");
         m_cipher.init(mode, m_keySpec, iv);
@@ -73,14 +80,15 @@ public class StorageManager {
 
     public void init() {
 
-        synchronized (init) {
+        rwlock.writeLock().lock();
+        try {
             if (init) {
                 return;
+            } else {
+                init = true;
             }
-        }
-
-        synchronized (init) {
-            init = true;
+        } finally {
+            rwlock.writeLock().unlock();
         }
 
         for (Account account : accountRepo.findAll()) {
@@ -102,18 +110,13 @@ public class StorageManager {
                 );
             } else if (account.getCtype() != null && account.getCtype().equalsIgnoreCase("onedrive for business")) {
                 cloudStorage = new OneDriveForBusiness(
-                        new CustomLocalReceiver(DEFAULT_CALLBACK_PORT, "<h1>Please close this window!</h1>", appConfig.APP_WEBDRIVER_FIREFOX, appConfig.APP_WEBDRIVER_FIREFOX_PROFILE),
+                        new CustomLocalReceiver(DEFAULT_CALLBACK_PORT, "<h1>Please close this window!</h1>", appConfig.APP_WEBDRIVER_FIREFOX),
                         appConfig.APP_ONEDRIVE_FOR_BUSINESS_CLIENT_ID,
                         appConfig.APP_ONEDRIVE_FOR_BUSINESS_CLIENT_SECRET,
                         "http://localhost:" + DEFAULT_CALLBACK_PORT + "/auth",
                         "");
-            } else if (account.getCtype() != null && account.getCtype().equalsIgnoreCase("onedrive")) {
-//                cloudStorage = new OneDrive(
-//                        new CustomLocalReceiver(DEFAULT_CALLBACK_PORT, "<h1>Please close this window!</h1>", appConfig.APP_WEBDRIVER_FIREFOX),
-//                        appConfig.APP_ONEDRIVE_FOR_BUSINESS_CLIENT_ID,
-//                        "fgpZARO538?:npgtCJP02^?",
-//                        "http://localhost:" + DEFAULT_CALLBACK_PORT + "/auth",
-//                        "");
+            } else {
+                throw new UnsupportedOperationException("unsupported cloud service provider");
             }
 
             boolean saveCred = false;
@@ -139,8 +142,11 @@ public class StorageManager {
                 }
             }
 
-            synchronized (storageMap) {
+            rwlock.writeLock().lock();
+            try {
                 storageMap.put(account.getCid(), cloudStorage);
+            } finally {
+                rwlock.writeLock().unlock();
             }
         }
     }
@@ -148,7 +154,8 @@ public class StorageManager {
     public Map.Entry<Integer, CloudStorage> getNextAvailableStorage() {
         Map.Entry<Integer, CloudStorage> result = null;
 
-        synchronized (storageMap) {
+        rwlock.writeLock().lock();
+        try {
             for (Map.Entry<Integer, CloudStorage> entry : storageMap.entrySet()) {
                 if (entry.getValue() instanceof OneDriveForBusiness) {   //workaround for ODfB
                     result = entry;
@@ -156,12 +163,14 @@ public class StorageManager {
                 } else {
                     SpaceAllocation spaceAllocation = entry.getValue().getAllocation();
                     long availableSpace = spaceAllocation.getTotal() - spaceAllocation.getUsed();
-                    if (availableSpace >= BLOCKSIZE) {
+                    if (availableSpace >= Constant.FILE_BLOCKSIZE) {
                         result = entry;
                         break;
                     }
                 }
             }
+        } finally {
+            rwlock.writeLock().unlock();
         }
 
         return result;
@@ -200,7 +209,7 @@ public class StorageManager {
      */
     public void save(String virtualPath, java.io.File file) throws IOException, InvalidCryptoParamException {
 
-        init();
+//        init();
 
         String parentPath = FilenameUtils.getFullPathNoEndSeparator(virtualPath);
         String fileName = FilenameUtils.getName(virtualPath);
@@ -225,9 +234,11 @@ public class StorageManager {
             parentPath = Constant.PATH_SEP;
         }
 
+        final long blockSize = fileName.endsWith(".mp4") ? Constant.VIDEO_BLOCKSIZE : Constant.FILE_BLOCKSIZE;
+
         long fileSz = file.length();
 
-        int requiredBlockCnt = (int) (fileSz % BLOCKSIZE == 0 ? (fileSz / BLOCKSIZE) : (fileSz / BLOCKSIZE) + 1);
+        int requiredBlockCnt = (int) (fileSz % blockSize == 0 ? (fileSz / blockSize) : (fileSz / blockSize) + 1);
 
         ExtendedFileEntry parentEntry = extendedFileRepo.findFileEntryByPath(parentPath);
 
@@ -253,8 +264,8 @@ public class StorageManager {
 
         Map.Entry<Integer, CloudStorage> entry = this.getNextAvailableStorage();
 
-        ExecutorService executor = Executors.newFixedThreadPool(10);
-        List<Future<Block>> futureList = new ArrayList<>();
+//        ExecutorService executor = Executors.newFixedThreadPool(2); //reduce the thread count from 10 to 2 as it does not show much improvement on the speed
+//        List<Future<Block>> futureList = new ArrayList<>();
 
         try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(file))) {
 
@@ -269,10 +280,10 @@ public class StorageManager {
 //                    throw new InsufficientSpaceException();
 //                } else {
 
-                long bytesToCopy = BLOCKSIZE;
+                long bytesToCopy = blockSize;
 
-                if (i == requiredBlockCnt - 1 && fileSz % BLOCKSIZE > 0) {
-                    bytesToCopy = fileSz % BLOCKSIZE;
+                if (i == requiredBlockCnt - 1 && fileSz % blockSize > 0) {
+                    bytesToCopy = fileSz % blockSize;
                 }
 
                 //ExecutorService executor = Executors.newFixedThreadPool(10);
@@ -283,11 +294,14 @@ public class StorageManager {
 //
 //                    }
 
-                try (BufferedOutputStream out = new BufferedOutputStream(new CipherOutputStream(new FileOutputStream(blockFile), getCipher(Cipher.ENCRYPT_MODE)))) {
+                byte[] ivBytes = new byte[16];
+                new SecureRandom().nextBytes(ivBytes);
+
+                try (BufferedOutputStream out = new BufferedOutputStream(new CipherOutputStream(new FileOutputStream(blockFile), getCipher(Cipher.ENCRYPT_MODE, ivBytes)))) {
                     IOUtils.copyLarge(in, out, 0, bytesToCopy);
 
-                    if (i == requiredBlockCnt - 1 && fileSz % BLOCKSIZE > 0) {
-                        for (int j = 0; j < BLOCKSIZE - bytesToCopy; j++) {
+                    if (i == requiredBlockCnt - 1 && fileSz % blockSize > 0) {
+                        for (int j = 0; j < blockSize - bytesToCopy; j++) {
                             out.write(0);
                         }
                     }
@@ -305,55 +319,92 @@ public class StorageManager {
                 fileEntry.setClastlock(Calendar.getInstance().getTime()); //maintain the lock on the file
                 fileRepo.save(fileEntry);
 
-                futureList.add(executor.submit(
-                        new Callable<Block>() {
-                            @Override
-                            public Block call() throws Exception {
+                Block newEntry = new Block();
+                newEntry.setCname(id);
+                newEntry.setCsize(blockSize);
+                newEntry.setCaccid(entry.getKey());
+                newEntry.setCdirectlink(xFileName);
+                newEntry.setCuse(1);
+                newEntry.setCcrtdt(Calendar.getInstance().getTime());
+                newEntry.setCiv(base64.encodeToString(ivBytes));
 
-                                Block newEntry = new Block();
-                                newEntry.setCname(id);
-                                newEntry.setCsize(BLOCKSIZE);
-                                newEntry.setCaccid(entry.getKey());
-                                newEntry.setCdirectlink(xFileName);
-                                newEntry.setCuse(1);
-                                newEntry.setCcrtdt(Calendar.getInstance().getTime());
+                do {
+                    CloudStorage remoteStorage = entry.getValue();
 
-                                do {
-                                    CloudStorage remoteStorage = entry.getValue();
-
-                                    try (InputStream is = new BufferedInputStream(new FileInputStream(blockFile))) {
-                                        remoteStorage.upload(xFileName, is, BLOCKSIZE, false);
-                                        break;
-                                    } catch (IOException | RuntimeException ex) {
-                                        logger.debug("error when uploading file to remote storage", ex);
+                    try (InputStream is = new BufferedInputStream(new FileInputStream(blockFile))) {
+                        remoteStorage.upload(xFileName, is, blockSize, false);
+                        break;
+                    } catch (IOException | RuntimeException ex) {
+                        logger.debug("error when uploading file to remote storage", ex);
 //                                    throw new FileUploadException();
-                                    }
+                    }
 
-                                } while (true);
+                } while (true);
 
-                                blockFile.delete();
+                blockFile.delete();
 
-                                return newEntry;
-                            }
-                        }
-                ));
-            }
-
-            for (Future<Block> f : futureList) {
-                Block blockEntry = f.get();
-
-                blockRepo.save(blockEntry);
+                blockRepo.save(newEntry);
 
                 FileTableId fileTableId = new FileTableId();
                 fileTableId.setCfileid(fileEntry.getCid());
-                fileTableId.setCblkid(blockEntry.getCid());
+                fileTableId.setCblkid(newEntry.getCid());
 
                 FileTable fileTable = new FileTable();
                 fileTable.setId(fileTableId);
                 fileTable.setCcrtdt(Calendar.getInstance().getTime());
 
                 fileTableRepo.save(fileTable);
+
+
+//                futureList.add(executor.submit(
+//                        new Callable<Block>() {
+//                            @Override
+//                            public Block call() throws Exception {
+//
+//                                Block newEntry = new Block();
+//                                newEntry.setCname(id);
+//                                newEntry.setCsize(Constant.FILE_BLOCKSIZE);
+//                                newEntry.setCaccid(entry.getKey());
+//                                newEntry.setCdirectlink(xFileName);
+//                                newEntry.setCuse(1);
+//                                newEntry.setCcrtdt(Calendar.getInstance().getTime());
+//
+//                                do {
+//                                    CloudStorage remoteStorage = entry.getValue();
+//
+//                                    try (InputStream is = new BufferedInputStream(new FileInputStream(blockFile))) {
+//                                        remoteStorage.upload(xFileName, is, Constant.FILE_BLOCKSIZE, false);
+//                                        break;
+//                                    } catch (IOException | RuntimeException ex) {
+//                                        logger.debug("error when uploading file to remote storage", ex);
+////                                    throw new FileUploadException();
+//                                    }
+//
+//                                } while (true);
+//
+//                                blockFile.delete();
+//
+//                                return newEntry;
+//                            }
+//                        }
+//                ));
             }
+
+//            for (Future<Block> f : futureList) {
+//                Block blockEntry = f.get();
+//
+//                blockRepo.save(blockEntry);
+//
+//                FileTableId fileTableId = new FileTableId();
+//                fileTableId.setCfileid(fileEntry.getCid());
+//                fileTableId.setCblkid(blockEntry.getCid());
+//
+//                FileTable fileTable = new FileTable();
+//                fileTable.setId(fileTableId);
+//                fileTable.setCcrtdt(Calendar.getInstance().getTime());
+//
+//                fileTableRepo.save(fileTable);
+//            }
 
             fileEntry.setClastlock(null);
             fileRepo.save(fileEntry);
@@ -363,15 +414,17 @@ public class StorageManager {
                 fileRepo.deleteById(fileEntry.getCid());
             }
             throw ex;
-        } catch (InterruptedException e) {
-            e.printStackTrace();
         }
+//        catch (InterruptedException e) {
+//            e.printStackTrace();
+//        }
 //        catch (FileUploadException e) {
 //            e.printStackTrace();
 //        }
-        catch (ExecutionException e) {
-            e.printStackTrace();
-        } finally {
+//        catch (ExecutionException e) {
+//            e.printStackTrace();
+//        }
+        finally {
             file.delete();
         }
     }
@@ -387,17 +440,17 @@ public class StorageManager {
         }
     }
 
-    /**
-     * Extract & save file content to target file
-     *
-     * @param virtualPath
-     * @param out
-     * @throws IOException
-     * @throws InvalidCryptoParamException
-     */
-    public void extract(String virtualPath, java.io.File out) throws IOException, InvalidCryptoParamException {
+    public void extract(String virtualPath, java.io.File out, int part) throws IOException, InvalidCryptoParamException {
+        if (out.exists()) {
+            out.delete();
+        }
 
-        init();
+        this.extract(virtualPath, new FileOutputStream(out, true), part);
+    }
+
+    public InputStream extractAsInputStream(String virtualPath, int part) throws IOException, InvalidCryptoParamException {
+
+        InputStream result = null;
 
         boolean targetExists = extendedFileRepo.existsByPath(virtualPath);
 
@@ -410,44 +463,129 @@ public class StorageManager {
         ExtendedFileEntry fileEntry = extendedFileRepo.findFileEntryByPath(virtualPath);
 
         if (fileEntry != null) {
-
             checkFileLock(fileEntry);
-
             fileSize = fileEntry.getCsize();
+
+            long blockSize = fileEntry.getCname().endsWith(".mp4") ? Constant.VIDEO_BLOCKSIZE : Constant.FILE_BLOCKSIZE;
 
             List<Block> fileBlocks = blockRepo.findBlocksByFileId(fileEntry.getCid());
 
-            if (out.exists()) {
-                out.delete();
-            }
+            int blockCnt = fileBlocks.size();
 
-            try (BufferedOutputStream outStream = new BufferedOutputStream(new FileOutputStream(out, true))) {
+
+            for (int i = 0; i < blockCnt; i++) {
+
+                if (part > -1) {
+                    i = part;
+                }
+
+                Block curBlock = fileBlocks.get(i);
+
+                CloudStorage cloudStorage = null;
+
+                rwlock.readLock().lock();
+                try {
+                    cloudStorage = storageMap.get(curBlock.getCaccid());
+                } finally {
+                    rwlock.readLock().unlock();
+                }
+
+                byte[] ivBytes = base64.decode(curBlock.getCiv());
+
+                try {
+                    if (result == null) {
+                        result = new CipherInputStream(cloudStorage.download(curBlock.getCdirectlink()), getCipher(Cipher.DECRYPT_MODE, ivBytes));
+                    } else {
+                        result = new SequenceInputStream(result, new CipherInputStream(cloudStorage.download(curBlock.getCdirectlink()), getCipher(Cipher.DECRYPT_MODE, ivBytes)));
+                    }
+                } catch (NoSuchPaddingException | InvalidKeyException | NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
+                    throw new InvalidCryptoParamException();
+                }
+
+                if (part > -1) {
+                    break;
+                }
+            }
+        } else {
+            throw new FileNotFoundException();
+        }
+
+        return result;
+    }
+
+    /**
+     * Extract & save file content to target file
+     *
+     * @param virtualPath
+     * @param out
+     * @throws IOException
+     * @throws InvalidCryptoParamException
+     */
+    public void extract(String virtualPath, OutputStream out, int part) throws IOException, InvalidCryptoParamException {
+
+//        init();
+
+        boolean targetExists = extendedFileRepo.existsByPath(virtualPath);
+
+        if (!targetExists) {
+            throw new FileNotFoundException(virtualPath);
+        }
+
+        long fileSize = -1;
+
+        ExtendedFileEntry fileEntry = extendedFileRepo.findFileEntryByPath(virtualPath);
+
+        if (fileEntry != null) {
+            checkFileLock(fileEntry);
+            fileSize = fileEntry.getCsize();
+
+            long blockSize = fileEntry.getCname().endsWith(".mp4") ? Constant.VIDEO_BLOCKSIZE : Constant.FILE_BLOCKSIZE;
+
+            List<Block> fileBlocks = blockRepo.findBlocksByFileId(fileEntry.getCid());
+
+            try (BufferedOutputStream outStream = new BufferedOutputStream(out)) {
 
                 int blockCnt = fileBlocks.size();
 
+
                 for (int i = 0; i < blockCnt; i++) {
+
+                    if (part > -1) {
+                        i = part;
+                    }
 
                     Block curBlock = fileBlocks.get(i);
 
                     CloudStorage cloudStorage = null;
 
-                    synchronized (storageMap) {
+                    rwlock.readLock().lock();
+                    try {
                         cloudStorage = storageMap.get(curBlock.getCaccid());
+                    } finally {
+                        rwlock.readLock().unlock();
                     }
 
-                    try (BufferedInputStream in = new BufferedInputStream(new CipherInputStream(cloudStorage.download(curBlock.getCdirectlink()), getCipher(Cipher.DECRYPT_MODE)))) {
-                        long byteCnt = (i == fileBlocks.size() - 1) ? fileSize % BLOCKSIZE : BLOCKSIZE;
+                    byte[] ivBytes = base64.decode(curBlock.getCiv());
+
+                    try (BufferedInputStream in = new BufferedInputStream(new CipherInputStream(cloudStorage.download(curBlock.getCdirectlink()), getCipher(Cipher.DECRYPT_MODE, ivBytes)))) {
+                        long byteCnt = (i == fileBlocks.size() - 1) ? fileSize % blockSize : blockSize;
                         IOUtils.copyLarge(in, outStream, 0, byteCnt);
                     } catch (NoSuchPaddingException | InvalidKeyException | NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
                         throw new InvalidCryptoParamException();
                     } finally {
 
                     }
+
+                    if (part > -1) {
+                        break;
+                    }
                 }
 
             } finally {
 
             }
+        } else {
+            throw new FileNotFoundException();
         }
     }
 
@@ -459,7 +597,7 @@ public class StorageManager {
      */
     public void delete(String virtualPath) throws IOException {
 
-        init();
+//        init();
 
         boolean targetExists = extendedFileRepo.existsByPath(virtualPath);
 
@@ -486,9 +624,12 @@ public class StorageManager {
                     if (oBlock.isPresent()) {
                         Block block = oBlock.get();
 
-                        synchronized (storageMap) {
+                        rwlock.readLock().lock();
+                        try {
                             CloudStorage cloudStorage = storageMap.get(block.getCaccid());
                             cloudStorage.delete(block.getCdirectlink());  //delete from cloud storage
+                        } finally {
+                            rwlock.readLock().unlock();
                         }
 
                         blockRepo.deleteById(block.getCid());

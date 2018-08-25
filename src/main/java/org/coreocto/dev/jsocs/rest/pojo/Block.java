@@ -19,6 +19,15 @@ public class Block {
     private String cdirectlink;
     private Integer caccid;
     private Date ccrtdt;
+    private String civ;
+
+    public String getCiv() {
+        return civ;
+    }
+
+    public void setCiv(String civ) {
+        this.civ = civ;
+    }
 
     public Date getCcrtdt() {
         return ccrtdt;

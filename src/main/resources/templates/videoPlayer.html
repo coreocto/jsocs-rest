@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:with="currentPage='video'">
+<head>
+    <div th:replace="fragments/common-head"></div>
+    <div th:replace="fragments/bootstrapInclude :: css"></div>
+    <div th:replace="fragments/common-css"></div>
+    <div th:replace="fragments/videojsInclude :: css"></div>
+</head>
+<body>
+<div class="wrapper">
+    <div th:replace="fragments/leftSidebar"></div>
+    <div id="content">
+        <div th:replace="fragments/topNavBar"></div>
+        <video id="example-video" class="video-js vjs-default-skin" controls>
+            <!--<source src="/videos/Batman.Begins.2005.720p.BRrip.x264.YIFY.mp4">-->
+            <source src="/api/video/SampleVideo_1280x720_10mb.mp4">
+        </video>
+        <!--<input id="url" value="/api/video/Batman.Begins.2005.720p.BRrip.x264.YIFY.mp4"/>-->
+    </div>
+</div>
+</body>
+<div th:replace="fragments/bootstrapInclude :: js"></div>
+<div th:replace="fragments/bootstrapDialogInclude :: js"></div>
+<div th:replace="fragments/common-js"></div>
+<script>
+    // $(function(){
+    //     // var player = window.player = videojs('example-video');
+    //     //         player.src({
+    //     //             src: $("#url").val(),
+    //     //             type: 'application/x-mpegURL'
+    //     //         });
+    //
+    // });
+    // (function(window, videojs) {
+    //     var player = window.player = videojs('example-video');
+    //
+    //     // hook up the video switcher
+    //     // var loadUrl = document.getElementById('load-url');
+    //     // var url = document.getElementById('url');
+    //     // loadUrl.addEventListener('submit', function(event) {
+    //     //     event.preventDefault();
+    //         player.src({
+    //             src: url.value,
+    //             type: 'application/x-mpegURL'
+    //         });
+    //     //     return false;
+    //     // });
+    // }(window, window.videojs));
+</script>
+</html>

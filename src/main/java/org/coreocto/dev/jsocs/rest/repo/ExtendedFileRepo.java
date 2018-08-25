@@ -1,39 +1,16 @@
 package org.coreocto.dev.jsocs.rest.repo;
 
 import org.coreocto.dev.jsocs.rest.pojo.ExtendedFileEntry;
-import org.coreocto.dev.jsocs.rest.pojo.FileEntry;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.stereotype.Repository;
 
 import javax.persistence.QueryHint;
-import javax.transaction.Transactional;
 import java.util.List;
 
 @Repository
 public interface ExtendedFileRepo extends JpaRepository<ExtendedFileEntry, Integer> {
-
-//    @Query("select f, f.cname as cfullpath from ExtendedFileEntry f where f.cname = ?1")
-//    FileEntry findByName(String path);
-
-//    List<FileEntry> findAll();
-
-//    @Transactional
-//    @Modifying
-//    @Query("update FileEntry f set cright = cright + 2 where f.cright >= ?1")
-//    void updateRight(int rightVal);
-//
-//    @Transactional
-//    @Modifying
-//    @Query("update FileEntry f set cleft = cleft + 2 where f.cleft > ?1")
-//    void updateLeft(int rightVal);
-
-//    @Transactional
-//    @Modifying
-//    @Query("delete from ExtendedFileEntry where cname = ?1 and cpath = ?2")
-//    void deleteByName(String name, String path);
 
     @Query(value = "WITH RECURSIVE my_tree AS (\n" +
             "select cid,cname,ccrtdt,csize,cisdir,cparent,clastlock, coalesce(cname,'/') cfullpath from tfiles where cparent is null\n" +

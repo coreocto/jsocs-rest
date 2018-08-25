@@ -1,6 +1,6 @@
 package org.coreocto.dev.jsocs.rest.pojo;
 
-import javax.persistence.*;
+import javax.persistence.Embeddable;
 import java.io.Serializable;
 import java.util.Objects;
 
