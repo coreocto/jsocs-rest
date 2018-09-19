@@ -28,7 +28,7 @@ public class AppConfig {
     public String APP_PCLOUD_CLIENT_SECRET;
 
     @Value("${app.webdriver.firefox}")
-    public String APP_WEBDRIVER_FIREFOX;
+    public String APP_WEBDRIVER_PATH;
 
     @Value("${app.video.cache.dir}")
     public String APP_VIDEO_CACHE_DIR;
