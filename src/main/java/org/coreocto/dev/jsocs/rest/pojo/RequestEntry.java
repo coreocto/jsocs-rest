@@ -13,6 +13,15 @@ public class RequestEntry {
     private Date ccrtdt;
     private String crequesturi;
     private String cresponse;
+    private Date cupddt;
+
+    public Date getCupddt() {
+        return cupddt;
+    }
+
+    public void setCupddt(Date cupddt) {
+        this.cupddt = cupddt;
+    }
 
     public Integer getCid() {
         return cid;

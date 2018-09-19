@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.firefox.FirefoxDriver;
 
 import java.io.IOException;
@@ -59,8 +60,9 @@ public class CustomLocalReceiver implements RedirectReceiver {
             // basically this class is same as the LocalReceiver class from cloudrail sdk
             // the difference is this class use selenium for authentication
             // because the java.awt.Desktop is not compatible with Spring Boot applications
-            System.setProperty("webdriver.gecko.driver", webDriverExe);
-            WebDriver webDriver = new FirefoxDriver();
+            System.setProperty("webdriver.chrome.driver", webDriverExe);
+//            WebDriver webDriver = new FirefoxDriver();
+            WebDriver webDriver = new ChromeDriver();
             webDriver.get(url);
 
 //            Desktop desktop = Desktop.getDesktop();
