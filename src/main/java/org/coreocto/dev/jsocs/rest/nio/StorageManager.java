@@ -35,6 +35,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+/*
+    Date                        Description
+========================================================================================
+    XXXX-XX-XX                  Initial release
+    2018-09-19                  Remove intermediate file when preparing encrypted file for upload
+ */
+
 @Service
 public class StorageManager {
 
@@ -384,12 +391,21 @@ public class StorageManager {
 //
 //        }
 
+        // pad the input stream with dummy input stream, so that the output is at fixed size
+        SequenceInputStream sis = new SequenceInputStream(new FileInputStream(file), new DummyInputStream());
+
         Map.Entry<Integer, CloudStorage> entry = this.getNextAvailableStorage();
 
 //        ExecutorService executor = Executors.newFixedThreadPool(2); //reduce the thread count from 10 to 2 as it does not show much improvement on the speed
 //        List<Future<Block>> futureList = new ArrayList<>();
 
-        try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(file))) {
+        try (BufferedInputStream in = new BufferedInputStream(sis)) {
+
+            if (in.markSupported()){
+                logger.debug("input stream supports mark method");
+            }else{
+                logger.debug("input stream does not support mark method");
+            }
 
             for (int i = 0; i < requiredBlockCnt; i++) {
                 String id = UUID.randomUUID().toString();
@@ -419,22 +435,22 @@ public class StorageManager {
                 byte[] ivBytes = new byte[16];
                 new SecureRandom().nextBytes(ivBytes);
 
-                try (BufferedOutputStream out = new BufferedOutputStream(new CipherOutputStream(new FileOutputStream(blockFile), cipherUtil.getCipher(Cipher.ENCRYPT_MODE, ivBytes)))) {
-                    IOUtils.copyLarge(in, out, 0, bytesToCopy);
-
-                    if (i == requiredBlockCnt - 1 && fileSz % blockSize > 0) {
-                        for (int j = 0; j < blockSize - bytesToCopy; j++) {
-                            out.write(0);
-                        }
-                    }
-
-                    out.flush();
-
-                } catch (IOException ex) {
-                    throw new CannotWriteTempFileException(blockFile.getAbsolutePath());
-                } catch (NoSuchPaddingException | InvalidKeyException | NoSuchAlgorithmException | InvalidAlgorithmParameterException ex) {
-                    throw new InvalidCryptoParamException();
-                }
+//                try (BufferedOutputStream out = new BufferedOutputStream(new CipherOutputStream(new FileOutputStream(blockFile), cipherUtil.getCipher(Cipher.ENCRYPT_MODE, ivBytes)))) {
+//                    IOUtils.copyLarge(in, out, 0, bytesToCopy);
+//
+//                    if (i == requiredBlockCnt - 1 && fileSz % blockSize > 0) {
+//                        for (int j = 0; j < blockSize - bytesToCopy; j++) {
+//                            out.write(0);
+//                        }
+//                    }
+//
+//                    out.flush();
+//
+//                } catch (IOException ex) {
+//                    throw new CannotWriteTempFileException(blockFile.getAbsolutePath());
+//                } catch (NoSuchPaddingException | InvalidKeyException | NoSuchAlgorithmException | InvalidAlgorithmParameterException ex) {
+//                    throw new InvalidCryptoParamException();
+//                }
 
                 String xFileName = Constant.PATH_SEP + id;
 
@@ -452,18 +468,23 @@ public class StorageManager {
 
                 do {
                     CloudStorage remoteStorage = entry.getValue();
+                    // 2018-09-19   Remove intermediate file when preparing encrypted file for upload - Begin
+                    //try () {
+                    try{
+                        InputStream is = new BufferedInputStream(new CipherInputStream(in, cipherUtil.getCipher(Cipher.ENCRYPT_MODE, ivBytes)));
 
-                    try (InputStream is = new BufferedInputStream(new FileInputStream(blockFile))) {
+//                    try (InputStream is = new BufferedInputStream(new FileInputStream(blockFile))) {
                         remoteStorage.upload(xFileName, is, blockSize, false);
                         break;
-                    } catch (IOException | RuntimeException ex) {
+                    } catch (Exception ex) {
+                        in.reset();
                         logger.debug("error when uploading file to remote storage", ex);
 //                                    throw new FileUploadException();
                     }
 
                 } while (true);
 
-                blockFile.delete();
+//                blockFile.delete();
 
                 blockRepo.save(newEntry);
 

@@ -40,4 +40,29 @@ public class RequestBodyUtil {
             }
         };
     }
+
+    public static RequestBody create(final MediaType mediaType, final InputStream inputStream, long contentLength) {
+        return new RequestBody() {
+            @Override
+            public MediaType contentType() {
+                return mediaType;
+            }
+
+            @Override
+            public long contentLength() {
+                return contentLength;
+            }
+
+            @Override
+            public void writeTo(BufferedSink sink) throws IOException {
+                Source source = null;
+                try {
+                    source = Okio.source(inputStream);
+                    sink.write(source, contentLength);
+                } finally {
+//                    Util.closeQuietly(source);
+                }
+            }
+        };
+    }
 }

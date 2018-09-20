@@ -134,7 +134,7 @@ public class OneDriveForBusiness implements CloudStorage {
         }
 
         if (uploadUrl != null) {
-            RequestBody body = RequestBodyUtil.create(MediaType.parse("application/octet-stream"), inputStream);
+            RequestBody body = RequestBodyUtil.create(MediaType.parse("application/octet-stream"), inputStream, l);
 
             request = this.getRequestBuilder()
                     .url(uploadUrl)

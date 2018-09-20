@@ -12,7 +12,6 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 @SpringBootApplication
-@EnableAsync
 public class Main extends SpringBootServletInitializer {
 
     public static void main(String[] args) {
@@ -23,14 +22,4 @@ public class Main extends SpringBootServletInitializer {
         //storageManager.init();
         // end
     }
-
-    @Bean
-    public TaskExecutor taskExecutor() {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(5);
-        executor.setMaxPoolSize(10);
-        executor.setQueueCapacity(25);
-        return executor;
-    }
-
 }
