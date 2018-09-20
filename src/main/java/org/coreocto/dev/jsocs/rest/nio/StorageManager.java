@@ -578,7 +578,7 @@ public class StorageManager {
             long diff = curTime.getTime() - fileEntry.getClastlock().getTime();
             long minutes = TimeUnit.MILLISECONDS.toMinutes(diff);
             if (minutes <= 5) {
-                throw new FileLockedExeption();
+                throw new FileLockedExeption(fileEntry.getCfullpath());
             }
         }
     }

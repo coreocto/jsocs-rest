@@ -258,8 +258,8 @@ public class AjaxController {
 //        return "{ \"data\":" + s + " }";
 //    }
 
-    @GetMapping(API_FILES + "**")
-    public ResponseEntity listFiles(HttpServletRequest request, HttpServletResponse response) {
+    @GetMapping(value = API_FILES + "**")
+    public StreamingResponseBody listFiles(HttpServletRequest request, HttpServletResponse response) {
 
         RequestEntry entry = this.logEntry(request);
 
@@ -274,48 +274,40 @@ public class AjaxController {
         try {
 
             if (fileEntry == null) {
-//                response.setStatus(HttpStatus.SC_NOT_FOUND);
-//                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                response.setStatus(HttpStatus.SC_NOT_FOUND);
+                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 
                 this.logExit(entry, null);
 
-//                StreamingResponseBody body = outputStream -> {
-//                    outputStream.write(("{\"status\":\"error\", \"message\":\"file not found\"}").getBytes());
-//                };
-//
-//                return new ResponseEntity(body, org.springframework.http.HttpStatus.OK);
-
                 String body = "{\"status\":\"error\", \"message\":\"file not found\"}";
-                return ResponseEntity
-                        .status(HttpStatus.SC_NOT_FOUND)
-                        .contentType(MediaType.APPLICATION_JSON_UTF8)
-                        .body(body);
-//                return out -> out.write(("{\"status\":\"error\", \"message\":\"file not found\"}").getBytes());
+                return out -> out.write(body.getBytes());
             }
 
             if (new Integer(0).equals(fileEntry.getCisdir())) {
 
                 this.logExit(entry, null);
 
-//                response.setStatus(HttpStatus.SC_OK);
-//
-//                response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
-//                response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"");
-//                response.setContentLengthLong(fileEntry.getCsize());
+                response.setStatus(HttpStatus.SC_OK);
+                response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
+                response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"");
+                response.setContentLengthLong(fileEntry.getCsize());
 
                 StreamingResponseBody body = outputStream -> {
                     try {
                         storageMgr.extract(newPath, outputStream, -1);
                     } catch (InvalidCryptoParamException e) {
-                        e.printStackTrace();
+                        logger.error("invalid encryption/decryption parameter", e);
                     }
-//                    outputStream.write(("{\"status\":\"error\", \"message\":\"file not found\"}").getBytes());
                 };
 
-                return ResponseEntity
-                        .status(HttpStatus.SC_OK)
-                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                        .body(body);
+                return body;
+
+//                return ResponseEntity
+//                        .ok()
+//                        .contentType(MediaType.valueOf(MediaType.APPLICATION_OCTET_STREAM_VALUE))
+//                        .contentLength(fileEntry.getCsize())
+//                        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+//                        .body(body);
 
                 // i get a HttpMediaTypeNotAcceptableException when tried to use StreamingResponseBody with ResponseEntity
                 // it seems it is needed to define HttpMessageConverter to parse StreamingResponseBody in correct way
@@ -368,7 +360,7 @@ public class AjaxController {
 
                 String s = "{ \"data\":" + new Gson().toJson(entries) + " }";
 
-                return ResponseEntity.ok(s);
+                return out -> out.write(s.getBytes());
 
 //                response.setStatus(HttpStatus.SC_OK);
 //                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
@@ -397,11 +389,8 @@ public class AjaxController {
 
         this.logExit(entry, null);
 
-//        response.setStatus(HttpStatus.SC_BAD_REQUEST);
-        return ResponseEntity
-                .status(HttpStatus.SC_BAD_REQUEST)
-                .body(null);
-//        return ResponseEntity.badRequest().build();
+        response.setStatus(HttpStatus.SC_BAD_REQUEST);
+        return null;
     }
 
     private String extractFilePath(HttpServletRequest request) {
