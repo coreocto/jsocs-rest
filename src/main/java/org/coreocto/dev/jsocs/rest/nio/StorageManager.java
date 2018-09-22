@@ -11,7 +11,9 @@ import org.coreocto.dev.jsocs.rest.Constant;
 import org.coreocto.dev.jsocs.rest.cloudrail.CustomLocalReceiver;
 import org.coreocto.dev.jsocs.rest.config.AppConfig;
 import org.coreocto.dev.jsocs.rest.exception.*;
+import org.coreocto.dev.jsocs.rest.msgraph.CloudStorageExtended;
 import org.coreocto.dev.jsocs.rest.msgraph.OneDriveForBusiness;
+import org.coreocto.dev.jsocs.rest.msgraph.QuickXorHash;
 import org.coreocto.dev.jsocs.rest.pojo.*;
 import org.coreocto.dev.jsocs.rest.repo.*;
 import org.coreocto.dev.jsocs.rest.util.CipherUtil;
@@ -22,14 +24,10 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
-import javax.crypto.CipherOutputStream;
 import javax.crypto.NoSuchPaddingException;
 import java.io.*;
 import java.nio.file.FileAlreadyExistsException;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
+import java.security.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -40,6 +38,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 ========================================================================================
     XXXX-XX-XX                  Initial release
     2018-09-19                  Remove intermediate file when preparing encrypted file for upload
+    2018-09-22                  Added logic to verify hash before & after upload
+                                Temporary (maybe permanent) remove support for pcloud
  */
 
 @Service
@@ -48,6 +48,7 @@ public class StorageManager {
     private static final int DEFAULT_CALLBACK_PORT = 8082;
     private final Logger logger = LoggerFactory.getLogger(StorageManager.class);
     private final ReadWriteLock rwlock = new ReentrantReadWriteLock();
+    private static final int MAX_UPLOAD_RETRY = 5;
 
     @Autowired
     AppConfig appConfig;
@@ -72,7 +73,7 @@ public class StorageManager {
 
     private Base64 base64 = new Base64();
 
-    private Map<Integer, CloudStorage> storageMap = new HashMap<>();
+    private Map<Integer, CloudStorageExtended> storageMap = new HashMap<>();
     private Boolean init = false;
 
     public void init() {
@@ -90,22 +91,23 @@ public class StorageManager {
 
         for (Account account : accountRepo.findAll()) {
 
-            CloudStorage cloudStorage = null;
+            CloudStorageExtended cloudStorage = null;
 
             if (account.getCactive() == null || account.getCactive().equals(0)) {
                 continue;
             }
 
-            if (account.getCtype() != null && account.getCtype().equalsIgnoreCase("pcloud")) {
-
-                cloudStorage = new PCloud(
-                        new CustomLocalReceiver(DEFAULT_CALLBACK_PORT, "<h1>Please close this window!</h1>", appConfig.APP_WEBDRIVER_PATH),
-                        appConfig.APP_PCLOUD_CLIENT_ID,
-                        appConfig.APP_PCLOUD_CLIENT_SECRET,
-                        "http://localhost:" + DEFAULT_CALLBACK_PORT + "/auth",
-                        ""
-                );
-            } else if (account.getCtype() != null && account.getCtype().equalsIgnoreCase("onedrive for business")) {
+//            if (account.getCtype() != null && account.getCtype().equalsIgnoreCase("pcloud")) {
+//
+//                cloudStorage = new PCloud(
+//                        new CustomLocalReceiver(DEFAULT_CALLBACK_PORT, "<h1>Please close this window!</h1>", appConfig.APP_WEBDRIVER_PATH),
+//                        appConfig.APP_PCLOUD_CLIENT_ID,
+//                        appConfig.APP_PCLOUD_CLIENT_SECRET,
+//                        "http://localhost:" + DEFAULT_CALLBACK_PORT + "/auth",
+//                        ""
+//                );
+//            } else
+            if (account.getCtype() != null && account.getCtype().equalsIgnoreCase("onedrive for business")) {
                 cloudStorage = new OneDriveForBusiness(
                         new CustomLocalReceiver(DEFAULT_CALLBACK_PORT, "<h1>Please close this window!</h1>", appConfig.APP_WEBDRIVER_PATH),
                         appConfig.APP_ONEDRIVE_FOR_BUSINESS_CLIENT_ID,
@@ -148,12 +150,12 @@ public class StorageManager {
         }
     }
 
-    public Map.Entry<Integer, CloudStorage> getNextAvailableStorage() {
-        Map.Entry<Integer, CloudStorage> result = null;
+    public Map.Entry<Integer, CloudStorageExtended> getNextAvailableStorage() {
+        Map.Entry<Integer, CloudStorageExtended> result = null;
 
         rwlock.writeLock().lock();
         try {
-            for (Map.Entry<Integer, CloudStorage> entry : storageMap.entrySet()) {
+            for (Map.Entry<Integer, CloudStorageExtended> entry : storageMap.entrySet()) {
                 if (entry.getValue() instanceof OneDriveForBusiness) {   //workaround for ODfB
                     result = entry;
                     break;
@@ -233,7 +235,7 @@ public class StorageManager {
         fileEntry.setClastlock(curTime);
         fileEntry = fileRepo.save(fileEntry);
 
-        Map.Entry<Integer, CloudStorage> entry = this.getNextAvailableStorage();
+        Map.Entry<Integer, CloudStorageExtended> entry = this.getNextAvailableStorage();
 
         try (BufferedInputStream in = new BufferedInputStream(inputStream)) {
 
@@ -280,10 +282,10 @@ public class StorageManager {
                 newEntry.setCcrtdt(Calendar.getInstance().getTime());
                 newEntry.setCiv(base64.encodeToString(ivBytes));
 
-                CloudStorage remoteStorage = entry.getValue();
-                try{
+                CloudStorageExtended remoteStorage = entry.getValue();
+                try {
 //                        (
-                                CipherInputStream cis = new CipherInputStream(in, cipherUtil.getCipher(Cipher.ENCRYPT_MODE, ivBytes));
+                    CipherInputStream cis = new CipherInputStream(in, cipherUtil.getCipher(Cipher.ENCRYPT_MODE, ivBytes));
 //                ){
                     remoteStorage.upload(xFileName, cis, bytesToCopy, false);
                 } catch (Exception ex) {
@@ -381,76 +383,24 @@ public class StorageManager {
         fileEntry.setClastlock(curTime);
         fileEntry = fileRepo.save(fileEntry);
 
-        File tmpDir = new File(appConfig.APP_TEMP_DIR);
-
-//        java.io.File blockFile = null;
-
-//        try {
-//            blockFile = java.io.File.createTempFile("jsocs-", ".tmp", tmpDir);  //this temp file will be reused
-//        } finally {
-//
-//        }
-
         // pad the input stream with dummy input stream, so that the output is at fixed size
         SequenceInputStream sis = new SequenceInputStream(new FileInputStream(file), new DummyInputStream());
 
-        Map.Entry<Integer, CloudStorage> entry = this.getNextAvailableStorage();
-
-//        ExecutorService executor = Executors.newFixedThreadPool(2); //reduce the thread count from 10 to 2 as it does not show much improvement on the speed
-//        List<Future<Block>> futureList = new ArrayList<>();
+        Map.Entry<Integer, CloudStorageExtended> entry = this.getNextAvailableStorage();
 
         try (BufferedInputStream in = new BufferedInputStream(sis)) {
 
-            if (in.markSupported()){
-                logger.debug("input stream supports mark method");
-            }else{
-                logger.debug("input stream does not support mark method");
+            if (in.markSupported()) {
+                logger.debug("input stream (var:in) supports mark method");
+            } else {
+                logger.debug("input stream (var:in) does not support mark method");
             }
 
             for (int i = 0; i < requiredBlockCnt; i++) {
                 String id = UUID.randomUUID().toString();
 
-                //temporary disable space check
-
-//                Map.Entry<Integer, CloudStorage> entry = this.getNextAvailableStorage();
-//
-//                if (entry == null) {
-//                    throw new InsufficientSpaceException();
-//                } else {
-
-                long bytesToCopy = blockSize;
-
-                if (i == requiredBlockCnt - 1 && fileSz % blockSize > 0) {
-                    bytesToCopy = fileSz % blockSize;
-                }
-
-                //ExecutorService executor = Executors.newFixedThreadPool(10);
-
-//                    try {
-                final java.io.File blockFile = java.io.File.createTempFile("jsocs-", ".tmp", tmpDir);
-//                    } finally {
-//
-//                    }
-
                 byte[] ivBytes = new byte[16];
                 new SecureRandom().nextBytes(ivBytes);
-
-//                try (BufferedOutputStream out = new BufferedOutputStream(new CipherOutputStream(new FileOutputStream(blockFile), cipherUtil.getCipher(Cipher.ENCRYPT_MODE, ivBytes)))) {
-//                    IOUtils.copyLarge(in, out, 0, bytesToCopy);
-//
-//                    if (i == requiredBlockCnt - 1 && fileSz % blockSize > 0) {
-//                        for (int j = 0; j < blockSize - bytesToCopy; j++) {
-//                            out.write(0);
-//                        }
-//                    }
-//
-//                    out.flush();
-//
-//                } catch (IOException ex) {
-//                    throw new CannotWriteTempFileException(blockFile.getAbsolutePath());
-//                } catch (NoSuchPaddingException | InvalidKeyException | NoSuchAlgorithmException | InvalidAlgorithmParameterException ex) {
-//                    throw new InvalidCryptoParamException();
-//                }
 
                 String xFileName = Constant.PATH_SEP + id;
 
@@ -466,25 +416,91 @@ public class StorageManager {
                 newEntry.setCcrtdt(Calendar.getInstance().getTime());
                 newEntry.setCiv(base64.encodeToString(ivBytes));
 
-                do {
-                    CloudStorage remoteStorage = entry.getValue();
-                    // 2018-09-19   Remove intermediate file when preparing encrypted file for upload - Begin
-                    //try () {
-                    try{
-                        InputStream is = new BufferedInputStream(new CipherInputStream(in, cipherUtil.getCipher(Cipher.ENCRYPT_MODE, ivBytes)));
+                int retry = 0;
 
-//                    try (InputStream is = new BufferedInputStream(new FileInputStream(blockFile))) {
-                        remoteStorage.upload(xFileName, is, blockSize, false);
-                        break;
-                    } catch (Exception ex) {
+                in.mark((int) blockSize * 2);
+
+                while (true) {
+                    CloudStorageExtended remoteStorage = entry.getValue();
+
+                    String localHash = null;
+                    String remoteHash = null;
+
+                    try {
+
+                        // Note: CipherInputStream DOES NOT support reset/mark operations, because the Cipher object changes when more data feed-in
+                        // DO NOT ever try these operations on CipherInputStream
+                        // Even attempted to wrap it with BufferedInputStream, and BufferedInputStream.markSupported() = true, it does NOT WORK
+
+                        // here we split up two separate CipherInputStream to make sure they read the identical data
+                        {
+                            CipherInputStream is = new CipherInputStream(in, cipherUtil.getCipher(Cipher.ENCRYPT_MODE, ivBytes));
+                            logger.debug("is.available() = {}", is.available());
+
+                            if (is.markSupported()) {
+                                logger.debug("input stream (var:is) supports mark method");
+                            } else {
+                                logger.debug("input stream (var:is) does not support mark method");
+                            }
+
+                            //  2018-09-22  Added logic to verify hash before & after upload - Begin
+                            MessageDigest digest = new QuickXorHash();
+                            int read = -1;
+                            int readByteCnt = 0;
+                            byte[] buffer = new byte[1024];
+                            for (; (read = is.read(buffer)) != -1 && readByteCnt < blockSize; ) {
+                                if (readByteCnt + read > blockSize) {
+                                    read = (int) blockSize - readByteCnt;
+                                }
+                                digest.update(buffer, 0, read);
+                                readByteCnt += read;
+                            }
+
+                            logger.debug("readByteCnt = {}", readByteCnt);
+
+                            byte[] hashBytes = digest.digest();
+                            localHash = Base64.encodeBase64String(hashBytes);
+                            logger.debug("localHash = {}", localHash);
+                            //  2018-09-22  Added logic to verify hash before & after upload - End
+                        }
+
                         in.reset();
-                        logger.debug("error when uploading file to remote storage", ex);
-//                                    throw new FileUploadException();
+
+                        CipherInputStream is = new CipherInputStream(in, cipherUtil.getCipher(Cipher.ENCRYPT_MODE, ivBytes));
+
+                        remoteStorage.upload(xFileName, is, blockSize, false);
+                        remoteHash = remoteStorage.getHash(xFileName);
+                        logger.debug("remoteHash = {}", remoteHash);
+
+                    } catch (Exception ex) {
+                        logger.error("error when uploading file to remote storage", ex);
+                        if (retry == MAX_UPLOAD_RETRY) {
+                            logger.error("reach max retry limit, stop retry attempt & throwing exception");
+                            throw new FileUploadException();
+                        } else {
+                            logger.debug("retry due to upload error, retry #{}", retry++);
+                            in.reset();
+                            continue;
+                        }
                     }
 
-                } while (true);
+                    if (localHash != null && localHash.equals(remoteHash)) {
+                        logger.debug("verified local & remote hash are the same");
+                        newEntry.setChash(localHash);
+                    } else {
+                        logger.debug("local:{} & remote hash:{} are not the same", localHash, remoteHash);
+                        if (retry == MAX_UPLOAD_RETRY) {
+                            logger.error("reach max retry limit, stop retry attempt & throwing exception");
+                            throw new CorruptedUploadException();
+                        } else {
+                            logger.debug("retry due to inconsistent hash between remote & local, retry #{}", retry++);
+                            in.reset();
+                            continue;
+                        }
+                    }
 
-//                blockFile.delete();
+                    break;
+                }
 
                 blockRepo.save(newEntry);
 
@@ -497,62 +513,12 @@ public class StorageManager {
                 fileTable.setCcrtdt(Calendar.getInstance().getTime());
 
                 fileTableRepo.save(fileTable);
-
-
-//                futureList.add(executor.submit(
-//                        new Callable<Block>() {
-//                            @Override
-//                            public Block call() throws Exception {
-//
-//                                Block newEntry = new Block();
-//                                newEntry.setCname(id);
-//                                newEntry.setCsize(Constant.FILE_BLOCKSIZE);
-//                                newEntry.setCaccid(entry.getKey());
-//                                newEntry.setCdirectlink(xFileName);
-//                                newEntry.setCuse(1);
-//                                newEntry.setCcrtdt(Calendar.getInstance().getTime());
-//
-//                                do {
-//                                    CloudStorage remoteStorage = entry.getValue();
-//
-//                                    try (InputStream is = new BufferedInputStream(new FileInputStream(blockFile))) {
-//                                        remoteStorage.upload(xFileName, is, Constant.FILE_BLOCKSIZE, false);
-//                                        break;
-//                                    } catch (IOException | RuntimeException ex) {
-//                                        logger.debug("error when uploading file to remote storage", ex);
-////                                    throw new FileUploadException();
-//                                    }
-//
-//                                } while (true);
-//
-//                                blockFile.delete();
-//
-//                                return newEntry;
-//                            }
-//                        }
-//                ));
             }
-
-//            for (Future<Block> f : futureList) {
-//                Block blockEntry = f.get();
-//
-//                blockRepo.save(blockEntry);
-//
-//                FileTableId fileTableId = new FileTableId();
-//                fileTableId.setCfileid(fileEntry.getCid());
-//                fileTableId.setCblkid(blockEntry.getCid());
-//
-//                FileTable fileTable = new FileTable();
-//                fileTable.setId(fileTableId);
-//                fileTable.setCcrtdt(Calendar.getInstance().getTime());
-//
-//                fileTableRepo.save(fileTable);
-//            }
 
             fileEntry.setClastlock(null);
             fileRepo.save(fileEntry);
 
-        } catch (IOException ex) {
+        } catch (Exception ex) {
             if (fileEntry != null) {
                 fileRepo.deleteById(fileEntry.getCid());
             }
@@ -624,7 +590,7 @@ public class StorageManager {
 
                 Block curBlock = fileBlocks.get(i);
 
-                CloudStorage cloudStorage = null;
+                CloudStorageExtended cloudStorage = null;
 
                 rwlock.readLock().lock();
                 try {
@@ -700,7 +666,7 @@ public class StorageManager {
 
                     Block curBlock = fileBlocks.get(i);
 
-                    CloudStorage cloudStorage = null;
+                    CloudStorageExtended cloudStorage = null;
 
                     rwlock.readLock().lock();
                     try {
@@ -768,7 +734,7 @@ public class StorageManager {
 
                         rwlock.readLock().lock();
                         try {
-                            CloudStorage cloudStorage = storageMap.get(block.getCaccid());
+                            CloudStorageExtended cloudStorage = storageMap.get(block.getCaccid());
                             cloudStorage.delete(block.getCdirectlink());  //delete from cloud storage
                         } finally {
                             rwlock.readLock().unlock();

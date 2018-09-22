@@ -1,15 +1,9 @@
 package org.coreocto.dev.jsocs.rest;
 
-import com.cloudrail.si.CloudRail;
-import org.coreocto.dev.jsocs.rest.config.AppConfig;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.annotation.Bean;
-import org.springframework.core.task.TaskExecutor;
-import org.springframework.scheduling.annotation.EnableAsync;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 @SpringBootApplication
 public class Main extends SpringBootServletInitializer {

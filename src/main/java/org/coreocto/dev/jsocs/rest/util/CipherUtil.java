@@ -19,9 +19,9 @@ public class CipherUtil {
     private AppConfig appConfig;
 
     public Cipher getCipher(int mode, byte[] ivBytes) throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException {
-        byte[] iv_key = appConfig.APP_ENCRYPT_KEY.getBytes();
+        byte[] keyBytes = appConfig.APP_ENCRYPT_KEY.getBytes();
         IvParameterSpec iv = new IvParameterSpec(ivBytes);
-        SecretKeySpec m_keySpec = new SecretKeySpec(iv_key, "AES");
+        SecretKeySpec m_keySpec = new SecretKeySpec(keyBytes, "AES");
         Cipher m_cipher = javax.crypto.Cipher.getInstance("AES/CTR/NoPadding");
         m_cipher.init(mode, m_keySpec, iv);
         return m_cipher;

@@ -31,7 +31,7 @@ public class RequestFilter implements Filter {
         if (request instanceof HttpServletRequest) {
             HttpServletRequest req = (HttpServletRequest) request;
 
-//            logger.debug("Starting a transaction for req : {}", req.getRequestURI());
+            logger.debug("Starting a transaction for req : {}", req.getRequestURI());
 
             // TODO: despite it does not throw any errors, the code below does not actually write data to the database
             // TODO: need resolve this problem

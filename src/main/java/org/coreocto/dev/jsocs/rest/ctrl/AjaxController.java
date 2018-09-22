@@ -4,8 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.http.HttpStatus;
-import org.checkerframework.checker.units.qual.A;
 import org.coreocto.dev.jsocs.rest.Constant;
+import org.coreocto.dev.jsocs.rest.aop.LogRequest;
 import org.coreocto.dev.jsocs.rest.config.AppConfig;
 import org.coreocto.dev.jsocs.rest.exception.InvalidCryptoParamException;
 import org.coreocto.dev.jsocs.rest.nio.MultipartFileSender;
@@ -22,10 +22,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.context.request.async.WebAsyncTask;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
@@ -33,14 +30,10 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 import javax.annotation.PostConstruct;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.xml.ws.Response;
 import java.io.*;
-import java.nio.charset.Charset;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.Callable;
 
 @RestController
 public class AjaxController {
@@ -62,8 +55,6 @@ public class AjaxController {
     private VideoCacheRepo videoCacheRepo;
     @Autowired
     private RequestRepo requestRepo;
-    @Autowired
-    private CipherUtil cipherUtil;
 
     @PostConstruct
     public void init() {
@@ -94,13 +85,14 @@ public class AjaxController {
         return account != null;
     }
 
+    @LogRequest
     @PostMapping(value = "/api/accounts", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
     public String createAccount(
             @RequestParam("username") String username, @RequestParam("type") String type,
             HttpServletRequest request
     ) {
 
-        RequestEntry entry = this.logEntry(request);
+//        RequestEntry entry = this.logEntry(request);
 
         boolean found = isAccountExists(username, type);
 
@@ -124,15 +116,16 @@ public class AjaxController {
 
         String respStr = resp.toString();
 
-        this.logExit(entry, respStr);
+//        this.logExit(entry, respStr);
 
         return resp.toString();
     }
 
+    @LogRequest
     @GetMapping(value = "/api/accounts", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
     public String listAccounts(HttpServletRequest request) {
 
-        RequestEntry entry = this.logEntry(request);
+//        RequestEntry entry = this.logEntry(request);
 
         List<Account> accountList = accountRepo.findAll();
         byte[] bytes = new Gson().toJson(accountList).getBytes();
@@ -145,15 +138,16 @@ public class AjaxController {
 
         String respStr = "{\"data\":" + s + "}";
 
-        this.logExit(entry, respStr);
+//        this.logExit(entry, respStr);
 
         return respStr;
     }
 
+    @LogRequest
     @DeleteMapping(value = "/api/accounts/{userId}", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
     public String deleteAccount(@PathVariable("userId") int userId, HttpServletRequest request) {
 
-        RequestEntry entry = this.logEntry(request);
+//        RequestEntry entry = this.logEntry(request);
 
         JsonObject resp = null;
 
@@ -170,7 +164,7 @@ public class AjaxController {
 
         String respStr = resp.toString();
 
-        this.logExit(entry, respStr);
+//        this.logExit(entry, respStr);
 
         return respStr;
     }
@@ -191,10 +185,11 @@ public class AjaxController {
         return newPath;
     }
 
+    @LogRequest
     @PostMapping(value = POST_API_FILES, produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
     public String save(@RequestParam("path") String path, @RequestParam("folder") Optional<String> folder, @RequestParam("file") Optional<MultipartFile> file, HttpServletRequest request) {
 
-        RequestEntry entry = this.logEntry(request);
+//        RequestEntry entry = this.logEntry(request);
 
         JsonObject resp = null;
 
@@ -208,9 +203,10 @@ public class AjaxController {
             if (file.isPresent()) {
                 File tmpDir = new File(appConfig.APP_TEMP_DIR);
 
-                String tmpStr = file.get().getOriginalFilename();
+//                String tmpStr = file.get().getOriginalFilename();
 
-                File targetFile = new File(tmpDir, tmpStr);
+//                File targetFile = new File(tmpDir, tmpStr);
+                File targetFile = File.createTempFile("jsocs-upload-",".tmp", tmpDir);
                 file.get().transferTo(targetFile);
 
                 storageMgr.save(path, targetFile);
@@ -237,7 +233,7 @@ public class AjaxController {
 
             String respStr = resp.toString();
 
-            this.logExit(entry, respStr);
+//            this.logExit(entry, respStr);
 
             return respStr;
         }
@@ -258,6 +254,7 @@ public class AjaxController {
 //        return "{ \"data\":" + s + " }";
 //    }
 
+//    @LogRequest
     @GetMapping(value = API_FILES + "**")
     public StreamingResponseBody listFiles(HttpServletRequest request, HttpServletResponse response) {
 
@@ -318,10 +315,6 @@ public class AjaxController {
 //                        logger.debug(e.getMessage(), e);
 //                    }
 //                };
-
-
-
-
 
 //                return new ResponseEntity(body, org.springframework.http.HttpStatus.OK);
 
@@ -418,10 +411,11 @@ public class AjaxController {
     public static final String API_FILES = "/api/files/";
     public static final String POST_API_FILES = "/api/files";
 
+    @LogRequest
     @DeleteMapping(value = API_FILES + "**", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
     public String deleteFile(HttpServletRequest request) {
 
-        RequestEntry entry = this.logEntry(request);
+//        RequestEntry entry = this.logEntry(request);
 
         String path = extractFilePath(request);
         String newPath = pathMassage(path);
@@ -441,7 +435,7 @@ public class AjaxController {
 
         String respStr = resp.toString();
 
-        this.logExit(entry, respStr);
+//        this.logExit(entry, respStr);
 
         return respStr;
     }

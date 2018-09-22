@@ -1,20 +1,20 @@
 package org.coreocto.dev.jsocs.rest.nio;
 
-import static java.util.Objects.isNull;
-import static java.util.Objects.nonNull;
-
-import java.io.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import javax.servlet.ServletOutputStream;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
+
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import static java.util.Objects.isNull;
+import static java.util.Objects.nonNull;
 
 /**
  * Utility class to send an input stream with Range header and ETag support.

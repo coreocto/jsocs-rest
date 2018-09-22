@@ -27,7 +27,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * it relies on the official graph api but follows the unified interface offered by CloudRail
  * this class is not fully functional currently but good enough to serve my needs
  */
-public class OneDriveForBusiness implements CloudStorage {
+public class OneDriveForBusiness implements CloudStorageExtended {
 
     private static final String bearer = "Bearer ";
     private static final String ME_DRIVE = "https://graph.microsoft.com/v1.0/me/drive";
@@ -106,6 +106,30 @@ public class OneDriveForBusiness implements CloudStorage {
     }
 
     @Override
+    public String getHash(String s) {
+        String newFileUrl = ME_DRIVE + "/root:" + s;
+        String returnHash = null;
+        Request request = this.getRequestBuilder()
+                        .url(newFileUrl).build();
+
+                try (Response response = getHttpClient().newCall(request).execute()) {
+                    if (!response.isSuccessful()) {
+                        throw new IOException("Unexpected code " + response);
+                    }
+
+                    String responseStr =response.body().string();
+                    logger.debug("response = "+responseStr);
+
+                    JsonObject jsonObject = new Gson().fromJson(responseStr, JsonObject.class);
+
+                    returnHash = jsonObject.get("file").getAsJsonObject().get("hashes").getAsJsonObject().get("quickXorHash").getAsString();
+                } catch (IOException e) {
+                    logger.error("error when getting quickXorHash", e);
+                }
+        return returnHash;
+    }
+
+    @Override
     public void upload(String s, InputStream inputStream, long l, boolean b) {
 
 //        this.validateToken();
@@ -143,13 +167,35 @@ public class OneDriveForBusiness implements CloudStorage {
                     .put(body) //PUT
                     .build();
 
+            String hash = null;
             try (Response response = getHttpClient().newCall(request).execute()) {
                 if (!response.isSuccessful()) {
                     throw new IOException("Unexpected code " + response);
                 }
+
+                String responseStr =response.body().string();
+                logger.debug("response = "+responseStr);
+
             } catch (IOException e) {
                 logger.error("error when getting response when uploading document", e);
             }
+
+//            {
+//                request = this.getRequestBuilder()
+//                        .url(ME_DRIVE + "/items/"+fileId).build();
+//
+//                try (Response response = getHttpClient().newCall(request).execute()) {
+//                    if (!response.isSuccessful()) {
+//                        throw new IOException("Unexpected code " + response);
+//                    }
+//
+//                    String responseStr =response.body().string();
+//                    logger.debug("response = "+responseStr);
+//                } catch (IOException e) {
+//                    logger.error("error when getting meta data", e);
+//                }
+//
+//            }
         }
     }
 
@@ -314,6 +360,7 @@ public class OneDriveForBusiness implements CloudStorage {
                     safeToProceed = true;
 
                 } catch (IOException e) {
+                    logger.debug("failed to sign in to OneDrive for Business");
                     throw new RuntimeException(e.getMessage());
                 }
 

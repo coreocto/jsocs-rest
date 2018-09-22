@@ -14,6 +14,15 @@ public class RequestEntry {
     private String crequesturi;
     private String cresponse;
     private Date cupddt;
+    private String chandler;
+
+    public String getChandler() {
+        return chandler;
+    }
+
+    public void setChandler(String chandler) {
+        this.chandler = chandler;
+    }
 
     public Date getCupddt() {
         return cupddt;

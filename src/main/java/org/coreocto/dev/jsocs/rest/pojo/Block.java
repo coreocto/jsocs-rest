@@ -20,6 +20,15 @@ public class Block {
     private Integer caccid;
     private Date ccrtdt;
     private String civ;
+    private String chash;
+
+    public String getChash() {
+        return chash;
+    }
+
+    public void setChash(String chash) {
+        this.chash = chash;
+    }
 
     public String getCiv() {
         return civ;

@@ -1,27 +1,17 @@
 package org.coreocto.dev.jsocs.rest.config;
 
-import org.coreocto.dev.jsocs.rest.concurrent.AsyncExceptionHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.task.AsyncTaskExecutor;
-import org.springframework.core.task.TaskExecutor;
 import org.springframework.scheduling.annotation.AsyncConfigurer;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
-import org.springframework.web.context.request.NativeWebRequest;
-import org.springframework.web.context.request.async.CallableProcessingInterceptor;
-import org.springframework.web.context.request.async.TimeoutCallableProcessingInterceptor;
 import org.springframework.web.servlet.config.annotation.AsyncSupportConfigurer;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
-
-import java.util.concurrent.Callable;
 
 @Configuration
 @EnableAsync
