@@ -1,0 +1,6 @@
+<ul class="nav nav-sidebar" th:fragment="commonSidebar">
+    <li th:classappend="${currentPage == 'accounts'} ? 'active'"><a href="/accounts">Accounts <span class="sr-only">(current)</span></a></li>
+    <li th:classappend="${currentPage == 'files'} ? 'active'"><a href="/files">Files</a></li>
+    <!--<li><a href="#">Storage</a></li>-->
+    <!--<li><a href="#">Export</a></li>-->
+</ul>

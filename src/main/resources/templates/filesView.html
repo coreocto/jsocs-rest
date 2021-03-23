@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:with="currentPage='files'">
+<head>
+    <div th:replace="fragments/common-head"></div>
+    <div th:replace="fragments/bootstrapInclude :: css"></div>
+    <div th:replace="fragments/common-css"></div>
+    <div th:replace="fragments/datatablesInclude :: css"></div>
+    <div th:replace="fragments/videojsInclude :: css"></div>
+</head>
+<body>
+
+<div class="wrapper">
+    <div th:replace="fragments/leftSidebar"></div>
+    <!-- Page Content  -->
+    <div id="content">
+        <div th:replace="fragments/topNavBar"></div>
+        <h1 class="page-header">Files - <span th:text="${path}" id="current-path"></span></h1>
+        <table class="table table-striped" id="fileTable"></table>
+        <p>
+        <div>
+            <button type="button" class="btn btn-info refresh-btn">
+                <span>Refresh</span>
+            </button>
+            <button type="button" class="btn btn-info upload-btn">
+                <span>Upload</span>
+            </button>
+            <button type="button" class="btn btn-info make-dir-btn">
+                <span>Create Folder</span>
+            </button>
+            <!--<button type="button" class="btn btn-info show-video-btn">-->
+            <!--<span>Show Video Player</span>-->
+            <!--</button>-->
+        </div>
+        </p>
+        <form enctype="multipart/form-data" id="upload-form" style="display:none">
+            <input name="file" type="file" id="upload-file"/>
+            <input type="button" value="Upload" id="upload-btn"/>
+            <input name="path" type="text" id="upload-path"/>
+        </form>
+
+        <input name="file" type="file" style="display:none" id="multi-upload-file" multiple/>
+
+        <p>
+        <h3 class="page-information">Current Upload: <span id="upload-filename"></span>(<span
+                id="upload-percent"></span>%)</h3>
+        <div class="progress progress-striped active">
+            <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        </p>
+        <div class="card">
+            <div class="card-header" style="background-color:#17a2b8">
+                <span style="color:white">Upload Queue</span>
+            </div>
+            <ul class="list-group list-group-flush" id="upload-queue">
+                <!--<li class="list-group-item">Cras justo odio</li>-->
+                <!--<li class="list-group-item">Dapibus ac facilisis in</li>-->
+                <!--<li class="list-group-item">Vestibulum at eros</li>-->
+            </ul>
+            <div class="card-header">
+                Finish List
+            </div>
+            <ul class="list-group list-group-flush" id="finish-list">
+            </ul>
+        </div>
+
+        <div id="dummy" style="display:none"></div>
+    </div>
+</div>
+</body>
+<div th:replace="fragments/bootstrapInclude :: js"></div>
+<div th:replace="fragments/datatablesInclude :: js"></div>
+<div th:replace="fragments/bootstrapDialogInclude :: js"></div>
+<div th:replace="fragments/common-js"></div>
+<div th:replace="fragments/videojsInclude :: js"></div>
+<style>
+    #my-video{
+        width:100%;
+        height:100%;
+    }
+</style>
+<script>
+    $(function () {
+        var table = $("#fileTable").DataTable({
+            "ajax": {
+                "url": "/api/files",
+                "type": "GET"
+            },
+            "columns": [
+                {
+                    "title": "File Name",
+                    "render": function (data, type, row) {
+                        if (row.cname == '..') {
+                            return "<a class='change-upper' href='javascript:void(0)'>" + row.cname + "</a>";
+                        } else if (row.cisdir == 1) {
+                            return "<a class='change-path' href='javascript:void(0)'>" + row.cname + "</a>";
+                        } else {
+                            return "<a class='download-btn' href='javascript:void(0)'>" + data + "</a>";
+                        }
+                    },
+                    "data": "cname"
+                },
+                {
+                    "width": "10%",
+                    "title": "Operations",
+                    "data": null,
+                    "render": function (data, tyep, row) {
+                        if (row.cid < 0) {
+                            return "&nbsp;";
+                        } else {
+                            if (data.cname == '..') {
+                                return '&nbsp;';
+                            } else if (row.cisdir == 1) {
+                                return "<div class=\"btn-group\" role=\"group\">" +
+                                    //"<button class='btn btn-secondary rename-btn'>Rename</button>" +
+                                    "<button class='btn btn-secondary delete-btn'>Delete</button>" +
+                                    "</div>";
+                            } else if (row.cisdir == 0) {
+                                if (row.cname.endsWith('.mp4')) {
+                                    return "<div class=\"btn-group\" role=\"group\">" +
+                                        "<button class='btn btn-primary play-btn'>Play</button>" +
+                                        "<button class='btn btn-secondary download-btn'>Download</button>" +
+                                        "<button class='btn btn-secondary delete-btn'>Delete</button>" +
+                                        "</div>";
+                                } else {
+                                    return "<div class=\"btn-group\" role=\"group\">" +
+                                        "<button class='btn btn-secondary download-btn'>Download</button>" +
+                                        "<button class='btn btn-secondary delete-btn'>Delete</button>" +
+                                        "</div>";
+                                }
+
+                            }
+                        }
+                    }
+                }
+            ]
+        });
+
+        //must use this format to attach event handler
+        $('#fileTable tbody')
+            .on('click', 'a.change-upper', function () {
+                var data = table.row($(this).parents('tr')).data();
+                var parentPath = data.cfullpath;
+                parentPath = parentPath.substr(0, parentPath.lastIndexOf('/'));
+
+                table.ajax.url("/api/files" + encodeURI(parentPath));
+                table.ajax.reload();
+
+                var $curPath = $("#current-path");
+                $curPath.empty();
+                if (parentPath == '') {
+                    $curPath.append('/');
+                } else {
+                    $curPath.append(parentPath);
+                }
+
+            })
+            .on('click', 'a.change-path', function () {
+                var data = table.row($(this).parents('tr')).data();
+                console.log(data);
+                // table.ajax.url("/api/files/?path=" + data.cfullpath);
+                table.ajax.url("/api/files" + encodeURI(data.cfullpath));
+                table.ajax.reload();
+                var $curPath = $("#current-path");
+                $curPath.empty();
+                $curPath.append(data.cfullpath);
+            }).on('click', 'a.download-url', function () {
+            var data = table.row($(this).parents('tr')).data();
+            $("#dummy").empty().append("<iframe src='/files/download" + data.cpath + data.cname + "'></iframe>");
+        })
+            .on('click', 'button.delete-btn', function () {
+                var data = table.row($(this).parents('tr')).data();
+
+                BootstrapModalWrapperFactory.confirm({
+                    title: "Confirm",
+                    message: 'Are you sure to delete this file?',
+                    onConfirmAccept: function () {
+                        $.ajax({
+                            url: '/api/files' + encodeURI(data.cfullpath),
+                            type: 'DELETE',
+                            success: function (response) {
+                                if (response.status == '00') {
+                                    BootstrapModalWrapperFactory.alert('File deleted!');
+                                    table.ajax.reload();
+                                } else {
+                                    BootstrapModalWrapperFactory.alert(response.message);
+                                }
+                            }
+                        });
+                    },
+                    onConfirmCancel: function () {
+                    }
+                });
+            }).on('click', '.download-btn', function () {
+            var data = table.row($(this).parents('tr')).data();
+            console.log(data);
+            $("#dummy").empty().append("<iframe src='/api/files" + encodeURI(data.cfullpath) + "'></iframe>");
+        }).on('click', 'button.play-btn', function () {
+
+            var data = table.row($(this).parents('tr')).data();
+
+            $.get(
+                '/api/video/cache' + encodeURI(data.cfullpath),
+                function (response, status) {
+                    console.log(response);
+                    if (response.status == '00') {
+                        var url = response.url;
+
+                        console.log($(window).width());
+                        console.log($(window).height());
+
+                        var $window = $(window);
+
+                        var w = $window.width() * 0.7;
+                        var h = $window.height() * 0.7;
+
+                        var m = BootstrapModalWrapperFactory.createModal({
+                            message:
+                                    "<video id='my-video' controls preload='auto' data-setup='{}'>" +
+                                    "<source src='"+encodeURI(url)+"' type='video/mp4'>",
+                            closable: true,
+                            title: "Current playing: "+data.cfullpath,
+                            closeByBackdrop: false,
+                            buttons: [
+                                {
+                                    label: "Close",
+                                    cssClass: "btn btn-primary",
+                                    action: function (modalWrapper, button, buttonData, originalEvent) {
+                                        return modalWrapper.hide();
+                                    }
+                                }
+                            ]
+                        });
+                        m.updateSize("modal-lg");
+                        m.show();
+
+                    } else {
+                        BootstrapModalWrapperFactory.alert(response.message);
+                    }
+                }
+            );
+        });
+        ;
+
+        $(".refresh-btn").click(function () {
+            table.ajax.reload();
+        });
+
+        var $uploadFilename = $("#upload-filename");
+        var $uploadPath = $("#upload-path");
+        var $uploadPercent = $("#upload-percent");
+        var $uploadProgress = $(".progress-bar");
+        var $uploadQueue = $("#upload-queue");
+        var $uploadFile = $('#upload-file');
+        var $uploadFileMulti = $("#multi-upload-file");
+        var $uploadFinishList = $("#finish-list");
+
+        $(".upload-btn").click(function () {
+            $uploadFileMulti.click();
+        });
+
+        function doUpload(domRef, curPath, curIdx, maxIdx) {
+            var file = domRef.files[curIdx];
+
+            if (file.size > 0) {
+                $uploadFilename.text(file.name);
+                if (curPath == '/') {
+                    $uploadPath.val(curPath + file.name);
+                } else {
+                    $uploadPath.val(curPath + '/' + file.name);
+                }
+                $uploadPercent.text('0');
+
+                $uploadProgress
+                    .css('width', '0%')
+                    .attr('aria-valuenow', 0);
+
+                // for security reasons, browser does not allows you to assign value to file control (except '')
+                // therefore the commented code below will give error when you try to do so
+                // $uploadFile.val(file);
+
+                // however, you can manipulate the real upload value using the FormData construct
+                // here I overwrite the original file value with a specific file
+                var tmpForm = new FormData($('#upload-form')[0]);
+                tmpForm.set('file', file, file.name);
+                // console.log($('#upload-form')[0]);
+                // console.log(new FormData($('#upload-form')[0]));
+
+                $.ajax({
+                    // Your server script to process the upload
+                    url: '/api/files',
+                    type: 'POST',
+
+                    // Form data
+                    data: tmpForm,
+
+                    // Tell jQuery not to process data or worry about content-type
+                    // You *must* include these options!
+                    cache: false,
+                    contentType: false,
+                    processData: false,
+
+                    // Custom XMLHttpRequest
+                    xhr: function () {
+                        var myXhr = $.ajaxSettings.xhr();
+                        if (myXhr.upload) {
+                            // For handling the progress of the upload
+                            myXhr.upload.addEventListener('progress', function (e) {
+                                if (e.lengthComputable) {
+
+                                    var percent = (e.loaded * 1.0 / e.total) * 100;
+                                    percent = parseInt(percent, 10);
+
+                                    $uploadProgress
+                                        .css('width', percent + '%')
+                                        .attr('aria-valuenow', percent)
+                                    // .attr('aria-valuemax',e.total)
+                                    ;
+
+                                    $uploadPercent.text(percent);
+                                }
+                            }, false);
+                        }
+                        return myXhr;
+                    },
+
+                    success: function (resp) {
+                        if (resp.status == '00') {
+                            // BootstrapModalWrapperFactory.alert('File uploaded!');
+                            // table.ajax.reload();
+                            // uploadMsg += file.name + ' ... uploaded<br/>';
+                            $uploadQueue.children().eq(curIdx).text(file.name + ' [' + file.size + 'B] to ' + curPath + ' (Uploaded)');
+                        } else {
+                            // BootstrapModalWrapperFactory.alert(resp.message);
+                            // uploadMsg += file.name + ' ... failed<br/>';
+                            $uploadQueue.children().eq(curIdx).text(file.name + ' [' + file.size + 'B] to ' + curPath + ' (Failed)');
+                        }
+                        //$('#upload-file').clear();
+
+                        if (curIdx < maxIdx - 1) {
+                            doUpload(domRef, curPath, curIdx + 1, maxIdx);
+                        } else {
+                            BootstrapModalWrapperFactory.alert('Queue processed. Please check the "Finish List" for result.');
+                            table.ajax.reload();
+                            $uploadFile.empty();
+                            $uploadFinishList.append($uploadQueue.children());
+                            $uploadQueue.empty();
+                        }
+                    },
+
+                    error: function (e) {
+                        BootstrapModalWrapperFactory.alert('Failed to upload File!');
+                        console.log(e);
+                    }
+                });
+            } else if (curIdx < maxIdx - 1) {
+                // uploadMsg += file.name + ' ... skipped<br/>';
+                doUpload(domRef, curPath, curIdx + 1, maxIdx);
+                $uploadQueue.children().eq(curIdx).text(file.name + ' [' + file.size + 'B] to ' + curPath + ' (Skipped)');
+            }
+        }
+
+        // var uploadMsg = '';
+
+        $uploadFileMulti.on('change', function () {
+
+            var files = this.files;
+
+            var fileCnt = this.files.length;
+
+            var curPath = $("#current-path").text();
+
+            $uploadQueue.empty();
+
+            for (var i = 0; i < fileCnt; i++) {
+                $uploadQueue.append('<li class="list-group-item">' + files[i].name + ' [' + files[i].size + 'B] to ' + curPath + '</li>');
+            }
+
+            // uploadMsg = '';
+
+            doUpload(this, curPath, 0, fileCnt);
+
+            // if (file.size > 1024) {
+            //     alert('max upload size is 1k')
+            // }
+
+            // Also see .name, .type
+        });
+
+        $(".make-dir-btn").click(function () {
+            var m = BootstrapModalWrapperFactory.createModal({
+                message: '<div class="form-label-group">\n' +
+                '        <input type="text" id="folderName" name="folderName" class="form-control" placeholder="Folder name" required autofocus>\n' +
+                '        \n' +
+                '    </div>',
+                closable: true,
+                title: "Create folder",
+                closeByBackdrop: false,
+                buttons: [
+                    {
+                        label: "Cancel",
+                        cssClass: "btn btn-secondary",
+                        action: function (modalWrapper, button, buttonData, originalEvent) {
+                            return modalWrapper.hide();
+                        }
+                    },
+                    {
+                        label: "OK",
+                        cssClass: "btn btn-primary",
+                        action: function (modalWrapper, button, buttonData, originalEvent) {
+
+                            var folderName = $("#folderName").val();
+                            var curPath = $("#current-path").text();
+
+                            console.log(folderName);
+                            console.log(curPath);
+
+                            $.post('/api/files',
+                                {
+                                    'folder': folderName,
+                                    'path': curPath
+                                },
+                                function (data) {
+                                    modalWrapper.hide();
+                                    console.log(data);
+                                    if (data.status == '00') {
+                                        BootstrapModalWrapperFactory.alert('Folder created!');
+                                        table.ajax.reload();
+                                    } else {
+                                        BootstrapModalWrapperFactory.alert(data.message);
+                                        // console.log(e);
+                                    }
+                                }
+                            );
+                        }
+                    }
+                ]
+            });
+            m.show();
+        });
+
+        $(".show-video-btn").click(function () {
+            console.log($(window).width());
+            console.log($(window).height());
+            var w = $(window).width();
+            var h = $(window).height();
+            var m = BootstrapModalWrapperFactory.createModal({
+                message: "<video id=\"my-video\" class=\"video-js\" controls preload=\"auto\" width=\"" + w + " height=\"" + h + "\" poster=\"MY_VIDEO_POSTER.jpg\" data-setup='{}'>" +
+                "<source src=\"//vjs.zencdn.net/v/oceans.mp4\" type=\"video/mp4\">" +
+                "</video>",
+                closable: true,
+                title: "Video Player",
+                closeByBackdrop: false,
+                buttons: [
+                    {
+                        label: "Close",
+                        cssClass: "btn btn-primary",
+                        action: function (modalWrapper, button, buttonData, originalEvent) {
+                            return modalWrapper.hide();
+                        }
+                    }
+                ]
+            });
+            m.updateSize("modal-lg");
+            m.show();
+        });
+
+    });
+</script>
+</html>

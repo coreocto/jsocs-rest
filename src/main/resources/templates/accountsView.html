@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:with="currentPage='accounts'">
+<head>
+    <div th:replace="fragments/common-head"></div>
+    <div th:replace="fragments/bootstrapInclude :: css"></div>
+    <div th:replace="fragments/common-css"></div>
+    <div th:replace="fragments/datatablesInclude :: css"></div>
+</head>
+<body>
+
+<div class="wrapper">
+    <div th:replace="fragments/leftSidebar"></div>
+    <!-- Page Content  -->
+    <div id="content">
+        <div th:replace="fragments/topNavBar"></div>
+        <table class="table table-striped" id="accTable"></table>
+        <button type="button" class="btn btn-info add-btn">
+            <span>Add</span>
+        </button>
+        <!--<a class="btn btn-info add-btn">-->
+            <!--<span class="glyphicon glyphicon-plus"></span> Add-->
+        <!--</a>-->
+    </div>
+</div>
+
+<!--<nav class="navbar navbar-inverse navbar-fixed-top">-->
+    <!--<div class="container-fluid">-->
+        <!--<div class="navbar-header">-->
+            <!--<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar"-->
+                    <!--aria-expanded="false" aria-controls="navbar">-->
+                <!--<span class="sr-only">Toggle navigation</span>-->
+                <!--<span class="icon-bar"></span>-->
+                <!--<span class="icon-bar"></span>-->
+                <!--<span class="icon-bar"></span>-->
+            <!--</button>-->
+            <!--<a class="navbar-brand" href="#">JSOCS Alpha</a>-->
+        <!--</div>-->
+        <!--&lt;!&ndash;<div id="navbar" class="navbar-collapse collapse">&ndash;&gt;-->
+            <!--&lt;!&ndash;<ul class="nav navbar-nav navbar-right">&ndash;&gt;-->
+                <!--&lt;!&ndash;<li><a href="#">Dashboard</a></li>&ndash;&gt;-->
+                <!--&lt;!&ndash;<li><a href="#">Settings</a></li>&ndash;&gt;-->
+                <!--&lt;!&ndash;<li><a href="#">Profile</a></li>&ndash;&gt;-->
+                <!--&lt;!&ndash;<li><a href="#">Help</a></li>&ndash;&gt;-->
+            <!--&lt;!&ndash;</ul>&ndash;&gt;-->
+            <!--&lt;!&ndash;<form class="navbar-form navbar-right">&ndash;&gt;-->
+                <!--&lt;!&ndash;<input type="text" class="form-control" placeholder="Search...">&ndash;&gt;-->
+            <!--&lt;!&ndash;</form>&ndash;&gt;-->
+        <!--&lt;!&ndash;</div>&ndash;&gt;-->
+    <!--</div>-->
+<!--</nav>-->
+
+<!--<div class="container-fluid">-->
+    <!--<div class="row">-->
+        <!--<div class="col-sm-3 col-md-2 sidebar">-->
+            <!--&lt;!&ndash;<ul class="nav nav-sidebar">&ndash;&gt;-->
+                <!--&lt;!&ndash;<li class="active"><a href="/accounts">Accounts <span class="sr-only">(current)</span></a></li>&ndash;&gt;-->
+                <!--&lt;!&ndash;<li><a href="/files">Files</a></li>&ndash;&gt;-->
+                <!--&lt;!&ndash;<li><a href="#">Storage</a></li>&ndash;&gt;-->
+                <!--&lt;!&ndash;<li><a href="#">Export</a></li>&ndash;&gt;-->
+            <!--&lt;!&ndash;</ul>&ndash;&gt;-->
+            <!--<div th:replace="fragments\commonSidebar"></div>-->
+        <!--</div>-->
+        <!--<div class="col-sm-9 col-sm-offset-3 col-md-10 col-md-offset-2 main">-->
+            <!--<h1 class="page-header">Accounts</h1>-->
+
+            <!--<div class="table-responsive">-->
+                <!--<table class="table table-striped" id="accTable">-->
+                <!--</table>-->
+            <!--</div>-->
+
+            <!--<div><a class="btn btn-info btn-sm add-btn">-->
+                <!--<span class="glyphicon glyphicon-plus"></span> Add-->
+            <!--</a></div>-->
+        <!--</div>-->
+    <!--</div>-->
+<!--</div>-->
+
+<div id="dummy" style="display:none"></div>
+
+</body>
+<div th:replace="fragments/bootstrapInclude :: js"></div>
+<div th:replace="fragments/datatablesInclude :: js"></div>
+<div th:replace="fragments/bootstrapDialogInclude :: js"></div>
+<!--<script src="//cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.12.4/js/bootstrap-select.min.js"></script>-->
+<div th:replace="fragments/common-js"></div>
+<script>
+    $(function () {
+        var table = $("#accTable").DataTable({
+            "ajax": {
+                url: "/api/accounts",
+                type: "GET",
+                "dataType": "json"
+            }
+            ,
+            "columns": [
+                {
+                    "title": "Account Name",
+                    "render": function (data, type, row) {
+                        return "<a href='javascript:void(0)'>" + data + "</a>";
+                    },
+                    "data": "cusername"
+                },
+                {
+                    "title": "Type",
+                    "render": function (data, type, row) {
+                        return "<a href='javascript:void(0)'>" + data + "</a>";
+                    },
+                    "data": "ctype"
+                },
+                {
+                    "title": "Token",
+                    "render": function (data, type, row) {
+                        if (data){
+                            return "<a href='javascript:void(0)'>" + data + "</a>";
+                        }else{
+                            return "--";
+                        }
+
+                    },
+                    "data": "ctoken"
+                },
+                {
+                    "width": "10%",
+                    "title": "Operations",
+                    "defaultContent": "<div class=\"btn-group\" role=\"group\">" +
+                                "<button class='btn btn-secondary delete-btn'>Delete</button>"+
+                                "<button class='btn btn-secondary refresh-btn'>Refresh</button>"+
+                                //"<button class='btn btn-secondary init-btn'>Initialize</button>" +
+                                "</div>"
+                }
+            ]
+        });
+
+        //must use this format to attach event handler
+        $('#accTable tbody')
+            .on('click', 'button.delete-btn', function () {
+                var data = table.row($(this).parents('tr')).data();
+
+                BootstrapModalWrapperFactory.confirm({
+                    title: "Confirm",
+                    message: 'Are you sure to remove this account?',
+                    onConfirmAccept: function () {
+                        $.ajax({
+                            url: '/api/accounts/' + (data.cid),
+                            type: 'DELETE',
+                            success: function (response) {
+                                if (response.status='00'){
+                                    BootstrapModalWrapperFactory.alert('Account deleted!');
+                                    table.ajax.reload();
+                                }else{
+                                    BootstrapModalWrapperFactory.alert(response.message);
+                                }
+                            }
+                        });
+                    },
+                    onConfirmCancel: function () {
+                    }
+                });
+
+                // var dialogRef = BootstrapDialog.confirm('Are you sure to remove this account?', function (result) {
+                //     if (result) {
+                //         $.post('/api/accounts/d',
+                //             {
+                //                 userId: data.cid
+                //             }, function (data) {
+                //                 if (data == 'success') {
+                //                     dialogRef.close();
+                //                     BootstrapModalWrapperFactory.alert('Account deleted!');
+                //                 } else {
+                //                     BootstrapModalWrapperFactory.alert('Failed to delete account!');
+                //                 }
+                //             });
+                //     }
+                // });
+            })
+            .on('click', 'button.refresh-btn', function(){
+                var data = table.row($(this).parents('tr')).data();
+
+                $.ajax({
+                    url: '/oauth?userId=' + (data.cid),
+                    type: 'GET',
+                    dataType: 'json',
+                    success: function (response) {
+                        console.log(response);
+                        console.log(response.status);
+                        if (response.status == '00') {
+                        //     BootstrapModalWrapperFactory.createModal({
+                        //         message: '<iframe src="'+response.url+'"></iframe>',//<div class="text-center">Loading</div>',
+                        //         closable: true,
+                        //         title: "AJAX Content",
+                        //         closeByBackdrop: false,
+                        //         // url: response.url,
+                        //         buttons: [
+                        //             {
+                        //                 label: "Cancel",
+                        //                 cssClass: "btn btn-secondary",
+                        //                 action: function (modalWrapper, button, buttonData, originalEvent) {
+                        //                     return modalWrapper.hide();
+                        //                 }
+                        //             },
+                        //             {
+                        //                 label: "OK",
+                        //                 cssClass: "btn btn-primary",
+                        //                 action: function (modalWrapper, button, buttonData, originalEvent) {
+                        //                     return modalWrapper.hide();
+                        //                 }
+                        //             }
+                        //         ]
+                        //     }).show();
+                            window.open(response.url);
+                        } else {
+                            BootstrapModalWrapperFactory.alert(response.message);
+                        }
+                    }
+                });
+
+                // window.open('https://my.pcloud.com/oauth2/authorize?client_id=1z5SVQMlzHk&response_type=code&redirect_uri=http://localhost:8080');
+
+                // BootstrapDialog.show({
+                //     message: function (dialog) {
+                //         var $message = $('<iframe></iframe>');
+                //         var pageToLoad = dialog.getData('pageToLoad');
+                //         $message.load(pageToLoad);
+                //
+                //         return $message;
+                //     },
+                //     data: {
+                //         'pageToLoad': 'https://my.pcloud.com/oauth2/authorize?client_id=1z5SVQMlzHk&response_type=code&redirect_uri=http://localhost:8080'
+                //     },
+                //     buttons: [{
+                //         label: 'Submit',
+                //         action: function (dialogRef) {
+                //             dialogRef.close();
+                //         }
+                //     }]
+                // });
+            });
+
+        $(".add-btn").click(function () {
+
+            BootstrapModalWrapperFactory.createAjaxModal({
+                message: '<div class="text-center">Loading</div>',
+                closable: true,
+                title: "Add Account",
+                closeByBackdrop: false,
+                url: '/accounts/add',
+                buttons: [
+                    {
+                        label: "Cancel",
+                        cssClass: "btn btn-secondary",
+                        action: function (modalWrapper, button, buttonData, originalEvent) {
+                            return modalWrapper.hide();
+                        }
+                    },
+                    {
+                        label: "Add",
+                        cssClass: "btn btn-primary",
+                        action: function (modalWrapper, button, buttonData, originalEvent) {
+                            $.post('/api/accounts', {
+                                username: $("#accountName").val(),
+                                type: $("#type").val()
+                            }).done(function (data) {
+                                modalWrapper.hide();
+                                if (data.status == '00') {
+                                    BootstrapModalWrapperFactory.alert('Account added!');
+                                    table.ajax.reload();
+                                }else{
+                                    BootstrapModalWrapperFactory.alert(data.message);
+                                }
+                            });
+                        }
+                    }
+                ]
+            });
+
+            // BootstrapDialog.show({
+            //     message: function (dialog) {
+            //         var $message = $('<div></div>');
+            //         var pageToLoad = dialog.getData('pageToLoad');
+            //         $message.load(pageToLoad);
+            //
+            //         return $message;
+            //     },
+            //     data: {
+            //         'pageToLoad': '/accounts/add'
+            //     },
+            //     buttons: [{
+            //         label: 'Submit',
+            //         action: function (dialogRef) {
+            //
+            //             $.post('/api/accounts/c', {
+            //                 username: $("#accountName").val(),
+            //                 type: $("#type").val()
+            //             }).done(function (data) {
+            //                 if (data == 'success') {
+            //                     dialogRef.close();
+            //                     BootstrapModalWrapperFactory.alert('Account deleted!');
+            //                     // BootstrapModalWrapperFactory.alert('Account added!', function () {
+            //                     //     table.ajax.reload();
+            //                     // });
+            //                 }
+            //             });
+            //         }
+            //     }]
+            // });
+        });
+    });
+</script>
+</html>

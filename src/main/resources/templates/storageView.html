@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<table class="table table-striped">
+    <tr>
+        <th>cid</th>
+        <th>cname</th>
+        <th>cuse</th>
+        <th>csize</th>
+        <th>cdriveid</th>
+    </tr>
+    <tr th:each="block : ${blockList}">
+        <td th:text="${block.cid}"></td>
+        <td th:text="${block.cname}"></td>
+        <td th:text="${block.cuse}"></td>
+        <td th:text="${block.csize}"></td>
+        <td th:text="${block.cdriveid}"></td>
+    </tr>
+</table>
+</body>
+</html>
